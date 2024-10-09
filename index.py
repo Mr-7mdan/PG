@@ -229,10 +229,6 @@ def get_data():
         else:
             return jsonify({"error": f"Unknown provider: {provider}"}), 400
 
-        if asyncio.iscoroutine(result):
-            app.logger.info("Running coroutine")
-            result = asyncio.run(result)
-        
         if result:
             if not isinstance(result, dict):
                 app.logger.error(f"Invalid result format for {video_name or imdb_id} from {provider}")

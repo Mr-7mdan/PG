@@ -156,7 +156,7 @@ def fetch_url(url, max_retries=5):
     logger.error(f"Failed to fetch URL: {url} after {max_retries} attempts.")
     return None
 
-async def imdb_parentsguide(tid, videoName):
+def imdb_parentsguide(tid, videoName):
     logger.info(f"Processing IMDB parents guide for {tid}: {videoName}")
     pg_url = f'https://www.imdb.com/title/{tid}/parentalguide'
     
@@ -179,9 +179,6 @@ async def imdb_parentsguide(tid, videoName):
     # Check if it's the new page structure
     new_structure = soup.find("main", role="main")
     old_structure = soup.find("div", id="main")
-
-    # logger.info(f"New structure elements found: {bool(new_structure)}")
-    # logger.info(f"Old structure elements found: {bool(old_structure)}")
 
     try:
         if new_structure and not old_structure:
@@ -410,12 +407,3 @@ def clean_text(text):
     # Remove extra whitespace and newline characters
     text = re.sub(r'\s+', ' ', text).strip()
     return text
-
-async def main():
-    tid = 'tt7366338'
-    videoName = 'Chernobyl'
-    result = await imdb_parentsguide(tid, videoName)
-
-if __name__ == "__main__":
-    asyncio.run(main())
-    session.close()
