@@ -39,35 +39,50 @@ app.config['DEBUG'] = True
 # Initialize the SqliteCache
 db = SqliteCache()
 
-# Load stats from file if it exists
-STATS_FILE = 'stats.json'
+# Update the update_stats function
+def update_stats(is_cached, sex_nudity_category, country):
+    stats = db.get_all_stats()
+    current_year = datetime.now().year
+    current_month = datetime.now().strftime('%Y-%m')
+    current_day = datetime.now().strftime('%Y-%m-%d')
 
-def save_stats():
-    with open(STATS_FILE, 'w') as f:
-        json.dump(stats, f, default=str)
+    # Update total hits
+    stats['total_hits'] = stats.get('total_hits', 0) + 1
+    if is_cached:
+        stats['cached_hits'] = stats.get('cached_hits', 0) + 1
+    else:
+        stats['fresh_hits'] = stats.get('fresh_hits', 0) + 1
 
-def load_stats():
-    if os.path.exists(STATS_FILE):
-        with open(STATS_FILE, 'r') as f:
-            loaded_stats = json.load(f)
-        # Convert defaultdict back to regular dict for JSON serialization
-        loaded_stats['hits_by_year'] = defaultdict(lambda: {'total': 0, 'cached': 0, 'fresh': 0}, {int(k): v for k, v in loaded_stats['hits_by_year'].items()})
-        loaded_stats['hits_by_month'] = defaultdict(lambda: {'total': 0, 'cached': 0, 'fresh': 0}, {k: v for k, v in loaded_stats['hits_by_month'].items()})
-        loaded_stats['sex_nudity_categories'] = defaultdict(int, {k: v for k, v in loaded_stats['sex_nudity_categories'].items()})
-        loaded_stats['countries'] = defaultdict(int, {k: v for k, v in loaded_stats['countries'].items()})
-        return loaded_stats
-    return {
-        'total_hits': 0,
-        'cached_hits': 0,
-        'fresh_hits': 0,
-        'hits_by_year': defaultdict(lambda: {'total': 0, 'cached': 0, 'fresh': 0}),
-        'hits_by_month': defaultdict(lambda: {'total': 0, 'cached': 0, 'fresh': 0}),
-        'sex_nudity_categories': defaultdict(int),
-        'countries': defaultdict(int)
-    }
+    # Update This Year's Statistics
+    hits_by_year = stats.get('hits_by_year', {})
+    hits_by_year[str(current_year)] = hits_by_year.get(str(current_year), 0) + 1
+    stats['hits_by_year'] = hits_by_year
 
-# Initialize tracking data
-stats = load_stats()
+    # Update This Month's Statistics
+    hits_by_month = stats.get('hits_by_month', {})
+    hits_by_month[current_month] = hits_by_month.get(current_month, 0) + 1
+    stats['hits_by_month'] = hits_by_month
+
+    # Update daily hits
+    hits_by_day = stats.get('hits_by_day', {})
+    hits_by_day[current_day] = hits_by_day.get(current_day, 0) + 1
+    stats['hits_by_day'] = hits_by_day
+
+    # Update Sex & Nudity Categories
+    if sex_nudity_category:
+        sex_nudity_categories = stats.get('sex_nudity_categories', {})
+        sex_nudity_categories[sex_nudity_category] = sex_nudity_categories.get(sex_nudity_category, 0) + 1
+        stats['sex_nudity_categories'] = sex_nudity_categories
+
+    # Update Countries Using the API
+    if country:
+        countries = stats.get('countries', {})
+        countries[country] = countries.get(country, 0) + 1
+        stats['countries'] = countries
+
+    # Save all stats
+    for key, value in stats.items():
+        db.set_stat(key, value)
 
 # Initialize the GeoIP reader
 geoip_reader = geoip2.database.Reader('GeoLite2-Country.mmdb')
@@ -89,52 +104,6 @@ def get_country_from_ip(ip):
 # Don't forget to close the reader when your application exits
 # You can do this in your main block or use atexit to ensure it's called
 atexit.register(geoip_reader.close)
-
-def update_stats(is_cached, sex_nudity_category=None):
-    current_time = datetime.now()
-    year = current_time.year
-    month = current_time.strftime('%Y-%m')
-    day = current_time.strftime('%Y-%m-%d')
-    
-    stats['total_hits'] += 1
-    if is_cached:
-        stats['cached_hits'] += 1
-    else:
-        stats['fresh_hits'] += 1
-    
-    stats['hits_by_year'].setdefault(year, {'total': 0, 'cached': 0, 'fresh': 0})
-    stats['hits_by_year'][year]['total'] += 1
-    if is_cached:
-        stats['hits_by_year'][year]['cached'] += 1
-    else:
-        stats['hits_by_year'][year]['fresh'] += 1
-    
-    stats['hits_by_month'].setdefault(month, {'total': 0, 'cached': 0, 'fresh': 0})
-    stats['hits_by_month'][month]['total'] += 1
-    if is_cached:
-        stats['hits_by_month'][month]['cached'] += 1
-    else:
-        stats['hits_by_month'][month]['fresh'] += 1
-    
-    stats.setdefault('hits_by_day', {})
-    stats['hits_by_day'].setdefault(day, {'total': 0, 'cached': 0, 'fresh': 0})
-    stats['hits_by_day'][day]['total'] += 1
-    if is_cached:
-        stats['hits_by_day'][day]['cached'] += 1
-    else:
-        stats['hits_by_day'][day]['fresh'] += 1
-    
-    if sex_nudity_category is not None:
-        category = str(sex_nudity_category) if sex_nudity_category else 'None'
-        stats['sex_nudity_categories'][category] = stats['sex_nudity_categories'].get(category, 0) + 1
-    
-    # Get country from IP address
-    ip = request.remote_addr
-    country = get_country_from_ip(ip)
-    stats['countries'][country] = stats['countries'].get(country, 0) + 1
-
-    app.logger.info(f"Updated stats: total_hits={stats['total_hits']}, cached_hits={stats['cached_hits']}, fresh_hits={stats['fresh_hits']}")
-    save_stats()  # Save stats after each update
 
 # Add this function to get movie/TV show name from OMDB API
 def get_title_from_omdb(imdb_id):
@@ -198,7 +167,12 @@ def get_data():
             else:
                 sex_nudity_category = next((item.get('cat') for item in review_items if item.get('name') == 'Sex & Nudity'), None)
             
-            update_stats(is_cached, sex_nudity_category)
+            # Get country from IP
+            ip_address = request.remote_addr
+            country = get_country_from_ip(ip_address)
+
+            # When calling update_stats, include the country
+            update_stats(is_cached, sex_nudity_category, country)
             result['is_cached'] = True
             return jsonify(result)
         
@@ -245,7 +219,12 @@ def get_data():
             else:
                 sex_nudity_category = next((item.get('cat') for item in review_items if item.get('name') == 'Sex & Nudity'), None)
             
-            update_stats(is_cached, sex_nudity_category)
+            # Get country from IP
+            ip_address = request.remote_addr
+            country = get_country_from_ip(ip_address)
+
+            # When calling update_stats, include the country
+            update_stats(is_cached, sex_nudity_category, country)
             
             # Only store in cache if review-items are not null
             if review_items:
@@ -277,52 +256,73 @@ def api_documentation():
     api_status = "green" if is_api_running() else "red"
     return render_template('documentation.html', api_status=api_status)
 
+# Update the logging configuration
+@app.before_first_request
+def setup_logging():
+    logging.basicConfig(level=logging.INFO)
+    app.logger.setLevel(logging.INFO)
+
+    class SQLiteHandler(logging.Handler):
+        def emit(self, record):
+            db.add_log(record.levelname, self.format(record))
+
+    handler = SQLiteHandler()
+    handler.setLevel(logging.INFO)
+    app.logger.addHandler(handler)
+
 # Add a new route for logs
 @app.route('/logs', methods=['GET'])
 def show_logs():
-    logs_html = """
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    offset = (page - 1) * per_page
+    logs = db.get_logs(limit=per_page, offset=offset)
+    api_status = "green" if is_api_running() else "red"
+    
+    logs_html = f"""
     <!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>API Logs</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
         <style>
-            body {
-                font-family: Arial, sans-serif;
-                line-height: 1.4;
-                color: #333;
-                max-width: 1200px;
-                margin: 0 auto;
+            body {{
                 padding: 20px;
-            }
-            h1 {
-                color: #2c3e50;
-            }
-            .nav-bar {
+            }}
+            .nav-bar {{
                 background-color: #2c3e50;
                 padding: 10px;
                 margin-bottom: 20px;
-            }
-            .nav-bar a {
+            }}
+            .nav-bar a {{
                 color: white;
                 text-decoration: none;
                 padding: 5px 10px;
-            }
-            .nav-bar a:hover {
+            }}
+            .nav-bar a:hover {{
                 background-color: #34495e;
-            }
-            #log-container {
-                background-color: #f0f0f0;
-                border-radius: 5px;
-                padding: 15px;
-                height: 800px;
-                overflow-y: scroll;
-                font-family: monospace;
-                white-space: pre-wrap;
-                font-size: 12px;
-                line-height: 1.2;
-            }
+            }}
+            .status-indicator {{
+                display: inline-block;
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                margin-left: 5px;
+            }}
+            .status-green {{
+                background-color: #00ff00;
+            }}
+            .status-red {{
+                background-color: #ff0000;
+            }}
+            .table {{
+                font-size: 0.9rem;
+            }}
+            .pagination {{
+                margin-top: 20px;
+            }}
         </style>
     </head>
     <body>
@@ -331,64 +331,51 @@ def show_logs():
             <a href="/stats">Statistics</a>
             <a href="/logs">Logs</a>
             <a href="/tryout">Tryout</a>
+            <span id="api-status" style="color: white;">API Status: <span class="status-indicator status-{api_status}"></span></span>
         </div>
-        <h1>API Logs (Live Updates)</h1>
-        <div id="log-container"></div>
-        <script>
-            const logContainer = document.getElementById('log-container');
-            const eventSource = new EventSource('/stream-logs');
-            
-            eventSource.onmessage = function(event) {
-                const logs = JSON.parse(event.data);
-                const currentContent = logContainer.innerHTML;
-                const newContent = logs.join('\\n');
-                
-                if (newContent !== currentContent) {
-                    logContainer.innerHTML = newContent;
-                    logContainer.scrollTop = logContainer.scrollHeight;
-                }
-            };
-            
-            eventSource.onerror = function(error) {
-                console.error('EventSource failed:', error);
-                eventSource.close();
-            };
-        </script>
+        <div class="container">
+            <h1 class="mb-4">API Logs</h1>
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Level</th>
+                        <th>Message</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {"".join(f"<tr><td>{log[1]}</td><td><span class='badge bg-{get_log_level_color(log[2])}'>{log[2]}</span></td><td>{log[3]}</td></tr>" for log in logs)}
+                </tbody>
+            </table>
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center">
+                    <li class="page-item {'' if page > 1 else 'disabled'}">
+                        <a class="page-link" href="{f'/logs?page={page-1}' if page > 1 else '#'}" tabindex="-1" {'aria-disabled="true"' if page == 1 else ''}>Previous</a>
+                    </li>
+                    <li class="page-item"><a class="page-link" href="#">Page {page}</a></li>
+                    <li class="page-item">
+                        <a class="page-link" href="/logs?page={page+1}">Next</a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     </body>
     </html>
     """
     return logs_html
 
-@app.route('/stream-logs')
-def stream_logs():
-    def generate():
-        log_file = 'api.log'
-        last_content = ""
-        while True:
-            try:
-                if not os.path.exists(log_file):
-                    with open(log_file, 'w') as f:
-                        initial_log = "Log file created. Waiting for logs..."
-                        f.write(initial_log + '\n')
-                    app.logger.info(f"Created log file: {log_file}")
-                    yield f"data: {json.dumps([initial_log])}\n\n"
-                    last_content = initial_log
-                else:
-                    with open(log_file, 'r') as f:
-                        content = ''.join(f.readlines()[-1000:])
-                        if content != last_content:
-                            yield f"data: {json.dumps(content.splitlines())}\n\n"
-                            last_content = content
-            except Exception as e:
-                error_message = f"Error reading log file: {str(e)}"
-                app.logger.error(error_message)
-                yield f"data: {json.dumps([error_message])}\n\n"
-            
-            time.sleep(1)  # Update every second
+def get_log_level_color(level):
+    colors = {
+        'DEBUG': 'secondary',
+        'INFO': 'info',
+        'WARNING': 'warning',
+        'ERROR': 'danger',
+        'CRITICAL': 'dark'
+    }
+    return colors.get(level, 'secondary')
 
-    return Response(generate(), mimetype='text/event-stream')
-
-# Modify the show_stats function to include the status indicator and logs link
+# Update the show_stats function
 @app.route('/stats', methods=['GET'])
 def show_stats():
     api_status = "green" if is_api_running() else "red"
@@ -398,31 +385,37 @@ def show_stats():
     # Get cached records count
     cached_records_count = db.get_cached_records_count()
 
+    # Get all stats
+    stats = db.get_all_stats()
+
+    # Initialize default values if stats are missing
+    total_hits = stats.get('total_hits', 0)
+    cached_hits = stats.get('cached_hits', 0)
+    fresh_hits = stats.get('fresh_hits', 0)
+
     # Prepare data for charts
     overall_data = {
         'labels': ['Total Hits', 'Cached Hits', 'Fresh Hits'],
-        'data': [stats['total_hits'], stats['cached_hits'], stats['fresh_hits']]
+        'data': [total_hits, cached_hits, fresh_hits]
     }
     
     # This Year's Statistics (per month)
     months_this_year = [f"{current_year}-{month:02d}" for month in range(1, 13)]
+    hits_by_month = stats.get('hits_by_month', {})
     this_year_data = {
         'labels': months_this_year,
-        'total': [stats['hits_by_month'].get(month, {'total': 0})['total'] for month in months_this_year],
-        'cached': [stats['hits_by_month'].get(month, {'cached': 0})['cached'] for month in months_this_year],
-        'fresh': [stats['hits_by_month'].get(month, {'fresh': 0})['fresh'] for month in months_this_year]
+        'total': [hits_by_month.get(month, 0) for month in months_this_year],
     }
     
     # This Month's Statistics (per day)
     days_in_month = calendar.monthrange(current_year, int(current_month.split('-')[1]))[1]
     days_this_month = [f"{current_month}-{day:02d}" for day in range(1, days_in_month + 1)]
+    hits_by_day = stats.get('hits_by_day', {})
     this_month_data = {
         'labels': days_this_month,
-        'total': [stats.get('hits_by_day', {}).get(day, {'total': 0})['total'] for day in days_this_month],
-        'cached': [stats.get('hits_by_day', {}).get(day, {'cached': 0})['cached'] for day in days_this_month],
-        'fresh': [stats.get('hits_by_day', {}).get(day, {'fresh': 0})['fresh'] for day in days_this_month]
+        'total': [hits_by_day.get(day, 0) for day in days_this_month],
     }
-
+    
     stats_html = f"""
     <!DOCTYPE html>
     <html lang="en">
@@ -509,9 +502,9 @@ def show_stats():
         
         <div class="stat-box">
             <h2>Overall Statistics</h2>
-            <p>Total Hits: {stats['total_hits']}</p>
-            <p>Cached Hits: {stats['cached_hits']}</p>
-            <p>Fresh Hits: {stats['fresh_hits']}</p>
+            <p>Total Hits: {total_hits}</p>
+            <p>Cached Hits: {cached_hits}</p>
+            <p>Fresh Hits: {fresh_hits}</p>
             <div class="chart-container">
                 <canvas id="overallChart"></canvas>
             </div>
@@ -519,9 +512,7 @@ def show_stats():
         
         <div class="stat-box">
             <h2>This Year's Statistics ({current_year})</h2>
-            <p>Total Hits: {stats['hits_by_year'].get(current_year, {'total': 0})['total']}</p>
-            <p>Cached Hits: {stats['hits_by_year'].get(current_year, {'cached': 0})['cached']}</p>
-            <p>Fresh Hits: {stats['hits_by_year'].get(current_year, {'fresh': 0})['fresh']}</p>
+            <p>Total Hits: {sum(this_year_data['total'])}</p>
             <div class="chart-container">
                 <canvas id="thisYearChart"></canvas>
             </div>
@@ -529,9 +520,7 @@ def show_stats():
         
         <div class="stat-box">
             <h2>This Month's Statistics ({current_month})</h2>
-            <p>Total Hits: {stats['hits_by_month'].get(current_month, {'total': 0})['total']}</p>
-            <p>Cached Hits: {stats['hits_by_month'].get(current_month, {'cached': 0})['cached']}</p>
-            <p>Fresh Hits: {stats['hits_by_month'].get(current_month, {'fresh': 0})['fresh']}</p>
+            <p>Total Hits: {sum(this_month_data['total'])}</p>
             <div class="chart-container">
                 <canvas id="thisMonthChart"></canvas>
             </div>
@@ -546,7 +535,7 @@ def show_stats():
             <h2>Sex & Nudity Categories</h2>
             <table>
                 <tr><th>Category</th><th>Count</th></tr>
-                {''.join(f"<tr><td>{cat}</td><td>{count}</td></tr>" for cat, count in stats['sex_nudity_categories'].items())}
+                {''.join(f"<tr><td>{cat}</td><td>{count}</td></tr>" for cat, count in stats.get('sex_nudity_categories', {}).items())}
             </table>
         </div>
         
@@ -554,7 +543,7 @@ def show_stats():
             <h2>Countries Using the API</h2>
             <table>
                 <tr><th>Country</th><th>Hits</th></tr>
-                {''.join(f"<tr><td>{country}</td><td>{count}</td></tr>" for country, count in stats['countries'].items())}
+                {''.join(f"<tr><td>{country}</td><td>{count}</td></tr>" for country, count in stats.get('countries', {}).items())}
             </table>
         </div>
 
@@ -581,7 +570,7 @@ def show_stats():
                 }}
             }});
 
-            // This Year's Statistics Chart (per month)
+            // This Year's Statistics Chart
             new Chart(document.getElementById('thisYearChart'), {{
                 type: 'line',
                 data: {{
@@ -591,18 +580,6 @@ def show_stats():
                             label: 'Total Hits',
                             data: {this_year_data['total']},
                             borderColor: 'rgba(75, 192, 192, 1)',
-                            fill: false
-                        }},
-                        {{
-                            label: 'Cached Hits',
-                            data: {this_year_data['cached']},
-                            borderColor: 'rgba(54, 162, 235, 1)',
-                            fill: false
-                        }},
-                        {{
-                            label: 'Fresh Hits',
-                            data: {this_year_data['fresh']},
-                            borderColor: 'rgba(255, 206, 86, 1)',
                             fill: false
                         }}
                     ]
@@ -618,7 +595,7 @@ def show_stats():
                 }}
             }});
 
-            // This Month's Statistics Chart (per day)
+            // This Month's Statistics Chart
             new Chart(document.getElementById('thisMonthChart'), {{
                 type: 'line',
                 data: {{
@@ -628,18 +605,6 @@ def show_stats():
                             label: 'Total Hits',
                             data: {this_month_data['total']},
                             borderColor: 'rgba(75, 192, 192, 1)',
-                            fill: false
-                        }},
-                        {{
-                            label: 'Cached Hits',
-                            data: {this_month_data['cached']},
-                            borderColor: 'rgba(54, 162, 235, 1)',
-                            fill: false
-                        }},
-                        {{
-                            label: 'Fresh Hits',
-                            data: {this_month_data['fresh']},
-                            borderColor: 'rgba(255, 206, 86, 1)',
                             fill: false
                         }}
                     ]
@@ -708,11 +673,6 @@ def tryout():
 
     return render_template('tryout.html', api_status=api_status, providers=providers, result=result, error=error, is_cached=is_cached, process_time=process_time)
 
-# Save stats periodically
-def periodic_save_stats():
-    save_stats()
-    threading.Timer(300, periodic_save_stats).start()  # 300 seconds = 5 minutes
-
 # Run the Flask app
 if __name__ == '__main__':
     import logging
@@ -755,5 +715,4 @@ if __name__ == '__main__':
     logging.info(f"API endpoint: http://{host}:{port}/get_data")
     logging.info(f"Status endpoint: http://{host}:{port}/status")
     logging.info(f"Stats dashboard: http://{host}:{port}/stats")
-    periodic_save_stats()  # Start periodic saving
     serve(TransLogger(app, setup_console_handler=True), host=host, port=port)

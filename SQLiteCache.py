@@ -10,6 +10,7 @@ from _pickle import loads, dumps, PickleBuffer
 
 import logging
 import json
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,22 @@ class SqliteCache:
     _add_sql = 'INSERT INTO entries (key, val, exp) VALUES (?, ?, ?)'
     _clear_sql = "DELETE FROM cache"  # Corrected SQL statement
 
+    _create_sql_stats = '''
+    CREATE TABLE IF NOT EXISTS stats (
+        key TEXT PRIMARY KEY,
+        value TEXT
+    )
+    '''
+
+    _create_sql_logs = '''
+    CREATE TABLE IF NOT EXISTS logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT,
+        level TEXT,
+        message TEXT
+    )
+    '''
+
     # other properties
     connection = None
 
@@ -59,6 +76,15 @@ class SqliteCache:
 
         self.path = cache_dir
 
+        self._create_tables()
+
+    def _create_tables(self):
+        with self._get_conn() as conn:
+            conn.execute(self._create_sql)
+            conn.execute(self._create_index)
+            conn.execute(self._create_sql_stats)
+            conn.execute(self._create_sql_logs)
+            logger.debug('Created tables and indexes.')
 
     def _get_conn(self):
 
@@ -81,7 +107,9 @@ class SqliteCache:
         with conn:
             conn.execute(self._create_sql)
             conn.execute(self._create_index)
-            logger.debug('Ran the create table && index SQL.')
+            conn.execute(self._create_sql_stats)
+            conn.execute(self._create_sql_logs)
+            logger.debug('Created tables and indexes.')
 
         # set the connection property
         self.connection = conn
@@ -120,7 +148,9 @@ class SqliteCache:
         with conn:
             conn.execute(self._create_sql)
             conn.execute(self._create_index)
-            logger.debug('Ran the create table && index SQL.')
+            conn.execute(self._create_sql_stats)
+            conn.execute(self._create_sql_logs)
+            logger.debug('Created tables and indexes.')
 
         # set the connection property
         self.connection = conn
@@ -279,6 +309,33 @@ class SqliteCache:
         except sqlite3.Error as e:
             logger.error(f"Error getting cached records count: {e}")
             return 0
+
+    # Stats methods
+    def set_stat(self, key, value):
+        with self._get_conn() as conn:
+            conn.execute("INSERT OR REPLACE INTO stats (key, value) VALUES (?, ?)", (key, json.dumps(value)))
+
+    def get_stat(self, key):
+        with self._get_conn() as conn:
+            cursor = conn.execute("SELECT value FROM stats WHERE key = ?", (key,))
+            result = cursor.fetchone()
+            return json.loads(result[0]) if result else None
+
+    def get_all_stats(self):
+        with self._get_conn() as conn:
+            cursor = conn.execute("SELECT key, value FROM stats")
+            return {key: json.loads(value) for key, value in cursor.fetchall()}
+
+    # Logs methods
+    def add_log(self, level, message):
+        timestamp = datetime.now().isoformat()
+        with self._get_conn() as conn:
+            conn.execute("INSERT INTO logs (timestamp, level, message) VALUES (?, ?, ?)", (timestamp, level, message))
+
+    def get_logs(self, limit=100, offset=0):
+        with self._get_conn() as conn:
+            cursor = conn.execute("SELECT * FROM logs ORDER BY timestamp DESC LIMIT ? OFFSET ?", (limit, offset))
+            return cursor.fetchall()
 
 # allow this module to be used to clear the cache
 if __name__ == '__main__':
