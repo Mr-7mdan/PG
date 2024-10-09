@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parent's Guide API Documentation</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #2980b9;
+            margin-top: 30px;
+        }
+        h3 {
+            color: #34495e;
+        }
+        code {
+            background-color: #f0f0f0;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .endpoint {
+            background-color: #e8f4f8;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .parameter {
+            margin-bottom: 10px;
+        }
+        .parameter code {
+            font-weight: bold;
+        }
+        .example {
+            background-color: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .nav-bar {
+            background-color: #2c3e50;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+        .nav-bar a {
+            color: white;
+            text-decoration: none;
+            padding: 5px 10px;
+        }
+        .nav-bar a:hover {
+            background-color: #34495e;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-left: 5px;
+        }
+        .status-green {
+            background-color: #00ff00;
+        }
+        .status-red {
+            background-color: #ff0000;
+        }
+    </style>
+</head>
+<body>
+    <div class="nav-bar">
+        <a href="/">Home</a>
+        <a href="/stats">Statistics</a>
+        <a href="/logs">Logs</a>
+        <a href="/tryout">Tryout</a>
+        <span>API Status: <span class="status-indicator status-{{ api_status }}"></span></span>
+    </div>
+    <div class="container">
+        <h1>Parent's Guide API Documentation</h1>
+        
+        <div class="endpoint">
+            <h2>Endpoint: /get_data</h2>
+            <p>Retrieves parental guide information for a given movie or TV show.</p>
+            
+            <h3>Parameters:</h3>
+            <div class="parameter">
+                <code>imdb_id</code> (optional): The IMDb ID of the movie or TV show
+            </div>
+            <div class="parameter">
+                <code>video_name</code> (required if imdb_id is not provided): The name of the movie or TV show
+            </div>
+            <div class="parameter">
+                <code>release_year</code> (optional): The release year of the movie or TV show
+            </div>
+            <div class="parameter">
+                <code>provider</code> (required): The data provider to use (e.g., imdb, kidsinmind, dove, parentpreview, cring, commonsense, movieguide)
+            </div>
+            
+            <h3>Example Usage:</h3>
+            <div class="example">
+                <code>GET /get_data?imdb_id=tt0111161&provider=imdb</code>
+            </div>
+            <div class="example">
+                <code>GET /get_data?video_name=The+Shawshank+Redemption&release_year=1994&provider=kidsinmind</code>
+            </div>
+        </div>
+        
+        <div class="endpoint">
+            <h2>Endpoint: /status</h2>
+            <p>Returns the current status of the API server.</p>
+            
+            <h3>Example Usage:</h3>
+            <div class="example">
+                <code>GET /status</code>
+            </div>
+        </div>
+        
+        <div class="endpoint">
+            <h2>Endpoint: /stats</h2>
+            <p>Displays statistics dashboard for API usage.</p>
+            
+            <h3>Example Usage:</h3>
+            <div class="example">
+                <code>GET /stats</code>
+            </div>
+        </div>
+        
+        <div class="endpoint">
+            <h2>Endpoint: /logs</h2>
+            <p>Displays the API log file for troubleshooting.</p>
+            
+            <h3>Example Usage:</h3>
+            <div class="example">
+                <code>GET /logs</code>
+            </div>
+        </div>
+        
+        <h2>Response Format</h2>
+        <p>All responses are in JSON format. If an error occurs, the response will include an "error" field with a description of the error.</p>
+    </div>
+</body>
+</html>

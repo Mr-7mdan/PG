@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Tryout</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding: 20px;
+        }
+        .nav-bar {
+            background-color: #2c3e50;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+        .nav-bar a {
+            color: white;
+            text-decoration: none;
+            padding: 5px 10px;
+        }
+        .nav-bar a:hover {
+            background-color: #34495e;
+        }
+        .badge-none { background-color: #28a745; }
+        .badge-mild { background-color: #ffc107; }
+        .badge-moderate { background-color: #fd7e14; }
+        .badge-severe { background-color: #dc3545; }
+        .badge-cached { background-color: #17a2b8; }
+        .badge-fresh { background-color: #28a745; }
+        .badge {
+            display: inline-block;
+            min-width: 100px;
+            text-align: center;
+            font-size: 1rem;
+            padding: 0.5em 0.75em;
+        }
+        .table td {
+            vertical-align: top;
+        }
+        .description-short {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .description-full {
+            display: none;
+        }
+        .spinner-border {
+            display: none;
+            width: 3rem;
+            height: 3rem;
+        }
+        .provider-option {
+            display: flex;
+            align-items: center;
+            padding: 5px;
+        }
+        .provider-logo {
+            width: 24px;
+            height: 24px;
+            margin-right: 10px;
+            object-fit: contain;
+        }
+        .spinner {
+            display: none;
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(0,0,0,.3);
+            border-radius: 50%;
+            border-top-color: #007bff;
+            animation: spin 1s ease-in-out infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="nav-bar">
+        <a href="/">Home</a>
+        <a href="/stats">Statistics</a>
+        <a href="/logs">Logs</a>
+        <a href="/tryout">Tryout</a>
+    </div>
+
+    <div class="container">
+        <h1 class="mb-4">API Tryout</h1>
+
+        <form id="searchForm" method="POST">
+            <div class="mb-3">
+                <label for="imdb_id" class="form-label">IMDB ID*</label>
+                <input type="text" class="form-control" id="imdb_id" name="imdb_id" required>
+                <small class="form-text text-muted">Example: tt0800369</small>
+            </div>
+            <div class="mb-3">
+                <label for="provider" class="form-label">Provider*</label>
+                <select class="form-select" id="provider" name="provider" required>
+                    <option value="imdb" data-logo="/static/imdb_logo.png">IMDB</option>
+                    <option value="kidsinmind" data-logo="/static/kidsinmind_logo.png">Kids In Mind</option>
+                    <option value="parentpreview" data-logo="/static/parentpreviews_logo.png">Parent Previews</option>
+                    <option value="cring" data-logo="/static/cringmdb_logo.png">Cring MDB</option>
+                    <option value="dove" data-logo="/static/dove_logo.png">Dove Foundation</option>
+                    <option value="movieguide" data-logo="/static/movieguide_logo.png">The Movie Guide</option>
+                    <option value="commonsense" data-logo="/static/commonsensemedia_logo.png">Common Sense Media</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label for="video_name" class="form-label">Video Name (optional)</label>
+                <input type="text" class="form-control" id="video_name" name="video_name">
+                <small class="form-text text-muted">Example: Thor</small>
+            </div>
+            <div class="mb-3">
+                <label for="release_year" class="form-label">Release Year (optional)</label>
+                <input type="text" class="form-control" id="release_year" name="release_year">
+                <small class="form-text text-muted">Example: 2011</small>
+            </div>
+            <button type="submit" class="btn btn-primary">Search</button>
+        </form>
+
+        <div id="spinner" class="text-center mt-4" style="display: none;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+
+        <div id="resultContainer" style="display: none;">
+            {% if error %}
+                <div class="alert alert-danger mt-4" role="alert">
+                    {{ error }}
+                </div>
+            {% endif %}
+
+            {% if result %}
+                <h2 class="mt-4">Results</h2>
+                <div class="mb-3">
+                    <span class="badge {% if result.is_cached %}badge-cached{% else %}badge-fresh{% endif %}">
+                        { result.is_cached }
+                    </span>
+                    <span class="ms-2">Process Time: {{ process_time }} seconds</span>
+                </div>
+                {% if result.get('review-items') %}
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th style="width: 15%;">Category</th>
+                                <th style="width: 15%;">Name</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in result.get('review-items', []) %}
+                                <tr>
+                                    <td>
+                                        <span class="badge badge-{{ item.get('cat', '').lower() }}">
+                                            {{ item.get('cat', '') }}
+                                        </span>
+                                    </td>
+                                    <td>{{ item.get('name', '') }}</td>
+                                    <td>
+                                        {% set description = item.get('Description') or item.get('description', '') %}
+                                        {% if description and description.lower() != 'na' %}
+                                            {% set formatted_description = description|replace('. ', '.<br>') %}
+                                            <div class="description-short">{{ formatted_description|safe }}</div>
+                                            <div class="description-full">{{ formatted_description|safe }}</div>
+                                            {% if description|length > 100 %}
+                                                <button class="btn btn-sm btn-link show-more" onclick="toggleDescription(this)">Show more</button>
+                                            {% endif %}
+                                        {% else %}
+                                            <em>No description available</em>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div class="alert alert-info" role="alert">
+                        No results found for this movie in the selected provider.
+                    </div>
+                {% endif %}
+            {% endif %}
+        </div>
+
+        <div class="spinner" id="loadingSpinner"></div>
+
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+        <script>
+            document.getElementById('searchForm').addEventListener('submit', function(e) {
+                document.getElementById('loadingSpinner').style.display = 'block';
+            });
+
+            // If there are results or an error, show the result container and hide the spinner
+            {% if result or error %}
+                document.addEventListener('DOMContentLoaded', function() {
+                    document.getElementById('spinner').style.display = 'none';
+                    document.getElementById('resultContainer').style.display = 'block';
+                });
+            {% endif %}
+
+            function toggleDescription(button) {
+                const row = button.closest('tr');
+                const shortDesc = row.querySelector('.description-short');
+                const fullDesc = row.querySelector('.description-full');
+                
+                if (shortDesc.style.display !== 'none') {
+                    shortDesc.style.display = 'none';
+                    fullDesc.style.display = 'block';
+                    button.textContent = 'Show less';
+                } else {
+                    shortDesc.style.display = '-webkit-box';
+                    fullDesc.style.display = 'none';
+                    button.textContent = 'Show more';
+                }
+            }
+
+            // Add this new function to create custom dropdown options with logos
+            function formatProviderOption(option) {
+                if (!option.id) {
+                    return option.text;
+                }
+                var $option = $(
+                    '<span class="provider-option"><img src="' + $(option.element).data('logo') + '" class="provider-logo" />' +
+                    '<span>' + option.text + '</span></span>'
+                );
+                return $option;
+            };
+
+            // Initialize Select2 for the provider dropdown
+            $(document).ready(function() {
+                $('#provider').select2({
+                    templateResult: formatProviderOption,
+                    templateSelection: formatProviderOption
+                });
+            });
+        </script>
+        <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+        <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    </div>
+
+</body>
+</html>
