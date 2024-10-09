@@ -26,7 +26,6 @@ import atexit
 import os
 import threading
 import calendar
-import asyncio
 
 # Create the Flask app instance
 app = Flask(__name__)
@@ -215,7 +214,7 @@ def get_data():
         if "imdb" in provider:
             result = imdb.imdb_parentsguide(imdb_id, video_name)
         elif "kidsinmind" in provider:
-            result = asyncio.run(KidsInMindScraper(imdb_id, video_name))
+            result = KidsInMindScraper(imdb_id, video_name)
         elif "dove" in provider:
             result = dove.DoveFoundationScrapper(video_name)
         elif "parentpreview" in provider:
@@ -269,8 +268,7 @@ def get_data():
 
 # Add this function to check the API status
 def is_api_running():
-    # For now, we'll always return True. In a real-world scenario,
-    # you might want to check database connections, external services, etc.
+    # You can implement a more sophisticated check here if needed
     return True
 
 # Modify the api_documentation function
@@ -478,6 +476,9 @@ def show_stats():
                 text-decoration: none;
                 padding: 5px 10px;
             }}
+            .api-status {{
+                color: white;
+            }}
             .nav-bar a:hover {{
                 background-color: #34495e;
             }}
@@ -502,7 +503,7 @@ def show_stats():
             <a href="/stats">Statistics</a>
             <a href="/logs">Logs</a>
             <a href="/tryout">Tryout</a>
-            <span>API Status: <span class="status-indicator status-{api_status}"></span></span>
+            <span id="api-status" style="color: white;">API Status: <span class="status-indicator status-{api_status}"></span></span>
         </div>
         <h1>API Statistics Dashboard</h1>
         
@@ -661,6 +662,7 @@ def show_stats():
 
 @app.route('/tryout', methods=['GET', 'POST'])
 def tryout():
+    api_status = "green" if is_api_running() else "red"
     providers = ['imdb', 'kidsinmind', 'dove', 'parentpreview', 'cring', 'commonsense', 'movieguide']
     result = None
     error = None
@@ -702,7 +704,7 @@ def tryout():
             except Exception as e:
                 error = f"An error occurred: {str(e)}"
 
-    return render_template('tryout.html', providers=providers, result=result, error=error, is_cached=is_cached, process_time=process_time)
+    return render_template('tryout.html', api_status=api_status, providers=providers, result=result, error=error, is_cached=is_cached, process_time=process_time)
 
 # Save stats periodically
 def periodic_save_stats():

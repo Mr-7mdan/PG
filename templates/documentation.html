@@ -66,6 +66,9 @@
             text-decoration: none;
             padding: 5px 10px;
         }
+        .api-status {
+                color: white;
+            }
         .nav-bar a:hover {
             background-color: #34495e;
         }
@@ -90,7 +93,7 @@
         <a href="/stats">Statistics</a>
         <a href="/logs">Logs</a>
         <a href="/tryout">Tryout</a>
-        <span>API Status: <span class="status-indicator status-{{ api_status }}"></span></span>
+        <span id="api-status" style="color: white;">API Status: <span class="status-indicator status-{api_status}"></span></span>
     </div>
     <div class="container">
         <h1>Parent's Guide API Documentation</h1>
