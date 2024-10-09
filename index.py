@@ -686,7 +686,9 @@ def tryout():
                     'video_name': video_name,
                     'release_year': release_year
                 }
-                response = requests.get(f'http://localhost:{port}/get_data', params=params)
+                # Use the current request's host for the API call
+                api_url = f"{request.scheme}://{request.host}/get_data"
+                response = requests.get(api_url, params=params)
                 result = response.json()
                 process_time = round(time.time() - start_time, 2)
                 

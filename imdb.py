@@ -173,7 +173,10 @@ def imdb_parentsguide(tid, videoName):
             "series_id": None
         }
     
-    soup = BeautifulSoup(html, 'lxml')
+    try:
+        soup = BeautifulSoup(html, 'lxml')
+    except:
+        soup = BeautifulSoup(html, 'html.parser')
 
     # Check if it's the new page structure
     new_structure = soup.find("main", role="main")
