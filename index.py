@@ -262,108 +262,15 @@ def setup_logging():
     logging.basicConfig(level=logging.INFO)
     app.logger.setLevel(logging.INFO)
 
-    class SQLiteHandler(logging.Handler):
-        def emit(self, record):
-            db.add_log(record.levelname, self.format(record))
-
-    handler = SQLiteHandler()
-    handler.setLevel(logging.INFO)
-    app.logger.addHandler(handler)
+    # Remove this part
+    # handler = SQLiteHandler()
+    # handler.setLevel(logging.INFO)
+    # app.logger.addHandler(handler)
 
 # Add a new route for logs
 @app.route('/logs', methods=['GET'])
 def show_logs():
-    page = request.args.get('page', 1, type=int)
-    per_page = 50
-    offset = (page - 1) * per_page
-    logs = db.get_logs(limit=per_page, offset=offset)
-    api_status = "green" if is_api_running() else "red"
-    
-    logs_html = f"""
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>API Logs</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-        <style>
-            body {{
-                padding: 20px;
-            }}
-            .nav-bar {{
-                background-color: #2c3e50;
-                padding: 10px;
-                margin-bottom: 20px;
-            }}
-            .nav-bar a {{
-                color: white;
-                text-decoration: none;
-                padding: 5px 10px;
-            }}
-            .nav-bar a:hover {{
-                background-color: #34495e;
-            }}
-            .status-indicator {{
-                display: inline-block;
-                width: 10px;
-                height: 10px;
-                border-radius: 50%;
-                margin-left: 5px;
-            }}
-            .status-green {{
-                background-color: #00ff00;
-            }}
-            .status-red {{
-                background-color: #ff0000;
-            }}
-            .table {{
-                font-size: 0.9rem;
-            }}
-            .pagination {{
-                margin-top: 20px;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="nav-bar">
-            <a href="/">Home</a>
-            <a href="/stats">Statistics</a>
-            <a href="/logs">Logs</a>
-            <a href="/tryout">Tryout</a>
-            <span id="api-status" style="color: white;">API Status: <span class="status-indicator status-{api_status}"></span></span>
-        </div>
-        <div class="container">
-            <h1 class="mb-4">API Logs</h1>
-            <table class="table table-striped table-hover">
-                <thead>
-                    <tr>
-                        <th>Timestamp</th>
-                        <th>Level</th>
-                        <th>Message</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {"".join(f"<tr><td>{log[1]}</td><td><span class='badge bg-{get_log_level_color(log[2])}'>{log[2]}</span></td><td>{log[3]}</td></tr>" for log in logs)}
-                </tbody>
-            </table>
-            <nav aria-label="Page navigation">
-                <ul class="pagination justify-content-center">
-                    <li class="page-item {'' if page > 1 else 'disabled'}">
-                        <a class="page-link" href="{f'/logs?page={page-1}' if page > 1 else '#'}" tabindex="-1" {'aria-disabled="true"' if page == 1 else ''}>Previous</a>
-                    </li>
-                    <li class="page-item"><a class="page-link" href="#">Page {page}</a></li>
-                    <li class="page-item">
-                        <a class="page-link" href="/logs?page={page+1}">Next</a>
-                    </li>
-                </ul>
-            </nav>
-        </div>
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    </body>
-    </html>
-    """
-    return logs_html
+    return "Logs are not available in this environment. Please check the Vercel dashboard for logs."
 
 def get_log_level_color(level):
     colors = {
