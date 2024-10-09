@@ -17,7 +17,6 @@ from SQLiteCache import SqliteCache
 from waitress import serve
 import logging
 from paste.translogger import TransLogger
-import asyncio
 import traceback
 from collections import defaultdict
 import sqlite3
@@ -27,6 +26,7 @@ import atexit
 import os
 import threading
 import calendar
+import asyncio
 
 # Create the Flask app instance
 app = Flask(__name__)
@@ -215,7 +215,7 @@ def get_data():
         if "imdb" in provider:
             result = imdb.imdb_parentsguide(imdb_id, video_name)
         elif "kidsinmind" in provider:
-            result = KidsInMindScraper(imdb_id, video_name)
+            result = asyncio.run(KidsInMindScraper(imdb_id, video_name))
         elif "dove" in provider:
             result = dove.DoveFoundationScrapper(video_name)
         elif "parentpreview" in provider:
