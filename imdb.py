@@ -20,7 +20,7 @@ session = requests.Session()
 
 IMPERSONATE_OPTIONS = [
     "chrome110", "chrome107", "chrome104", "chrome99", "chrome100", 
-    "chrome101", "chrome120", "edge99", "edge101", "safari15_3", "safari15_5"
+    "chrome101", "edge99", "edge101", "safari15_3", "safari15_5"
 ]
 
 USER_AGENTS = {
@@ -30,7 +30,6 @@ USER_AGENTS = {
     "chrome99": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
     "chrome100": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Safari/537.36",
     "chrome101": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.54 Safari/537.36",
-    "chrome120": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "edge99": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36 Edg/99.0.1150.30",
     "edge101": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.54 Safari/537.36 Edg/101.0.1210.39",
     "safari15_3": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.3 Safari/605.1.15",
@@ -98,62 +97,32 @@ def get_episode_info(soup):
     return None
 
 def fetch_url(url, max_retries=5):
-    impersonate_option = random.choice(IMPERSONATE_OPTIONS)
-    user_agent = USER_AGENTS[impersonate_option]
-
-    headers = {
-        'User-Agent': user_agent,
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Referer': 'https://www.imdb.com/',
-        'Origin': 'https://www.imdb.com',
-        'DNT': '1',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'same-origin',
-        'Sec-Fetch-User': '?1',
-        'Upgrade-Insecure-Requests': '1',
-    }
-
-    # logger.info(f"Using User-Agent: {user_agent}")
-    # logger.info(f"Impersonating: {impersonate_option}")
-
     for attempt in range(max_retries):
         try:
-            response = session.get(
-                url, 
-                headers=headers, 
-                impersonate=impersonate_option
-            )
-            logger.info(f"Response status code: {response.status_code}")
-            if response.status_code == 200:
-                # Export response text to file
-                # with open('last_response.html', 'w', encoding='utf-8') as f:
-                #     f.write(response.text)
-                # logger.info("Response text exported to last_response.html")
-                return response.text
-            else:
-                logger.error(f"Attempt {attempt + 1} failed. Status code: {response.status_code}")
-        except Exception as e:
-            logger.error(f"Attempt {attempt + 1} failed. Error: {str(e)}")
-
-        if attempt < max_retries - 1:  # Don't sleep after the last attempt
-            if attempt == 0:
-                sleep_time = 0  # No delay for the first retry
-            elif attempt == 1:
-                sleep_time = random.uniform(1, 3)
-            elif attempt == 2:
-                sleep_time = random.uniform(5, 10)
-            elif attempt == 3:
-                sleep_time = random.uniform(11, 20)
-            else:
-                sleep_time = random.uniform(20, 40)
+            impersonate_option = random.choice(IMPERSONATE_OPTIONS)
+            user_agent = USER_AGENTS[impersonate_option]
             
-            logger.info(f"Retrying in {sleep_time:.2f} seconds...")
-            time.sleep(sleep_time)
-
-    logger.error(f"Failed to fetch URL: {url} after {max_retries} attempts.")
-    return None
+            response = session.get(url, impersonate=impersonate_option)
+            response.raise_for_status()
+            return response.text
+        except requests.RequestsError as e:
+            if "impersonate" in str(e):
+                logger.warning(f"Impersonation failed for {impersonate_option}, falling back to standard request")
+                try:
+                    headers = {'User-Agent': user_agent}
+                    response = requests.get(url, headers=headers)
+                    response.raise_for_status()
+                    return response.text
+                except Exception as e:
+                    logger.error(f"Standard request failed: {e}")
+            logger.error(f"Attempt {attempt + 1} failed. Error: {e}")
+            if attempt < max_retries - 1:
+                sleep_time = 2 ** attempt
+                logger.info(f"Retrying in {sleep_time} seconds...")
+                time.sleep(sleep_time)
+            else:
+                logger.error(f"All attempts failed for URL: {url}")
+                raise
 
 def imdb_parentsguide(tid, videoName):
     logger.info(f"Processing IMDB parents guide for {tid}: {videoName}")
