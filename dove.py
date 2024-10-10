@@ -2,7 +2,17 @@ import requests
 from bs4 import BeautifulSoup
 import re
 from difflib import SequenceMatcher
-from utils import get_imdb_id_from_omdb  # Import the function from utils.py
+import os
+def getIMDBID(name):
+    omdb_api_key = os.environ.get('OMDB_API_KEY')
+    url = f"http://www.omdbapi.com/?t={name.strip()}&apikey={omdb_api_key}&plot=full&r=json"
+    res = requests.get(url).json()
+
+    if res.get("Response") != 'False':
+        return res.get("imdbID")
+    else:
+        print("Couldn't find IMDB ID")
+        return None
 
 def getDesc(soup, s):
     descs = soup.findAll("h5", {"class": "details-title"})
@@ -65,7 +75,7 @@ def DoveFoundationScrapper(videoName):
                 print(f"Failed to process category: {item.text.strip()}")
 
         return {
-            "id": get_imdb_id_from_omdb(title),
+            "id": getIMDBID(title),
             "status": "Success",
             "title": title.title(),
             "provider": "DoveFoundation",

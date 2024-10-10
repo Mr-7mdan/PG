@@ -3,7 +3,17 @@ from bs4 import BeautifulSoup
 import re
 import json
 import os
-from utils import get_imdb_id_from_omdb  # Import the function from utils.py
+
+def getIMDBID(name):
+    omdb_api_key = os.environ.get('OMDB_API_KEY')
+    url = f"http://www.omdbapi.com/?t={name.strip()}&apikey={omdb_api_key}&plot=full&r=json"
+    res = requests.get(url).json()
+
+    if res.get("Response") != 'False':
+        return res.get("imdbID")
+    else:
+        print("Couldn't find IMDB ID")
+        return None
 
 def MovieGuideOrgScrapper(ID, videoName):
     moviename = videoName.lower().strip().replace(" ","-").replace(":","").strip()
@@ -94,7 +104,7 @@ def MovieGuideOrgScrapper(ID, videoName):
         #print(Details)
 
         Review = {
-            "id": get_imdb_id_from_omdb(videoName),
+            "id": getIMDBID(videoName),
             "status" : "Sucess",
             "title": title.title(),
             "provider": "MovieGuide",
