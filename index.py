@@ -26,6 +26,7 @@ import atexit
 import os
 import threading
 import calendar
+import sys
 
 # Create the Flask app instance
 app = Flask(__name__)
@@ -37,7 +38,11 @@ app.logger.setLevel(logging.INFO)
 app.config['DEBUG'] = True
 
 # Initialize the SqliteCache
-db = SqliteCache()
+try:
+    db = SqliteCache()
+except Exception as e:
+    logger.error(f"Failed to initialize SqliteCache: {e}")
+    sys.exit(1)
 
 # Update the update_stats function
 def update_stats(is_cached, sex_nudity_category, country):
@@ -84,6 +89,9 @@ def update_stats(is_cached, sex_nudity_category, country):
     for key, value in stats.items():
         db.set_stat(key, value)
 
+    # Log the updated stats for debugging
+    logger.info(f"Updated stats: Total Hits: {stats['total_hits']}, Cached Hits: {stats['cached_hits']}, Fresh Hits: {stats['fresh_hits']}")
+
 # Initialize the GeoIP reader
 geoip_reader = geoip2.database.Reader('GeoLite2-Country.mmdb')
 
@@ -107,22 +115,58 @@ atexit.register(geoip_reader.close)
 
 # Add this function to get movie/TV show name from OMDB API
 def get_title_from_omdb(imdb_id):
-    omdb_api_key = os.environ.get('OMDB_API_KEY')  # Get the API key from environment variable
+    omdb_api_key = os.environ.get('OMDB_API_KEY')
     if not omdb_api_key:
         app.logger.error("OMDB API key not found in environment variables")
         return None
+
+    cache_key = f"omdb_title_{imdb_id}"
+    cached_data = db.get_omdb_cache(cache_key)
+    if cached_data:
+        app.logger.info(f"Retrieved title for {imdb_id} from OMDB cache")
+        return cached_data.get('Title')
 
     url = f"http://www.omdbapi.com/?i={imdb_id}&apikey={omdb_api_key}"
     
     try:
         response = requests.get(url)
-        response.raise_for_status()  # Raise an exception for bad status codes
+        response.raise_for_status()
         data = response.json()
         
         if data.get('Response') == 'True':
+            db.set_omdb_cache(cache_key, data)
             return data.get('Title')
         else:
             app.logger.warning(f"No title found for IMDb ID: {imdb_id}")
+            return None
+    except requests.RequestException as e:
+        app.logger.error(f"Error fetching data from OMDB: {str(e)}")
+        return None
+
+def get_imdb_id_from_omdb(video_name, release_year=None):
+    omdb_api_key = os.environ.get('OMDB_API_KEY')
+    if not omdb_api_key:
+        app.logger.error("OMDB API key not found in environment variables")
+        return None
+
+    cache_key = f"omdb_id_{video_name}_{release_year}"
+    cached_data = db.get_omdb_cache(cache_key)
+    if cached_data:
+        app.logger.info(f"Retrieved data for {video_name} ({release_year}) from OMDB cache")
+        return cached_data
+
+    url = f"http://www.omdbapi.com/?t={video_name}&y={release_year}&apikey={omdb_api_key}"
+    
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get('Response') == 'True':
+            db.set_omdb_cache(cache_key, data)
+            return data
+        else:
+            app.logger.warning(f"No IMDB data found for: {video_name}")
             return None
     except requests.RequestException as e:
         app.logger.error(f"Error fetching data from OMDB: {str(e)}")
@@ -144,6 +188,15 @@ def get_data():
 
         if not provider:
             return jsonify({"error": "Provider parameter is required"}), 400
+
+        # If IMDB ID is not provided, try to get it from OMDB
+        if not imdb_id and video_name:
+            omdb_data = get_imdb_id_from_omdb(video_name, release_year)
+            if omdb_data:
+                imdb_id = omdb_data.get('imdbID')
+                if not release_year:
+                    release_year = omdb_data.get('Year')
+            app.logger.info(f"Retrieved IMDB ID from OMDB: {imdb_id}, Release Year: {release_year}")
 
         if imdb_id:
             key = f"{imdb_id}_{provider}"
@@ -188,7 +241,7 @@ def get_data():
         if "imdb" in provider:
             result = imdb.imdb_parentsguide(imdb_id, video_name)
         elif "kidsinmind" in provider:
-            result = KidsInMindScraper(imdb_id, video_name)
+            result = KidsInMindScraper(imdb_id, video_name, release_year)
         elif "dove" in provider:
             result = dove.DoveFoundationScrapper(video_name)
         elif "parentpreview" in provider:
@@ -262,15 +315,28 @@ def setup_logging():
     logging.basicConfig(level=logging.INFO)
     app.logger.setLevel(logging.INFO)
 
-    # Remove this part
-    # handler = SQLiteHandler()
-    # handler.setLevel(logging.INFO)
-    # app.logger.addHandler(handler)
+    class SQLiteHandler(logging.Handler):
+        def emit(self, record):
+            db.add_log(record.levelname, self.format(record))
+
+    handler = SQLiteHandler()
+    handler.setLevel(logging.INFO)
+    app.logger.addHandler(handler)
 
 # Add a new route for logs
 @app.route('/logs', methods=['GET'])
 def show_logs():
-    return "Logs are not available in this environment. Please check the Vercel dashboard for logs."
+    api_status = "green" if is_api_running() else "red"
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    offset = (page - 1) * per_page
+    logs = db.get_logs(limit=per_page, offset=offset)
+    
+    return render_template('logs.html', 
+                           api_status=api_status,
+                           logs=logs,
+                           page=page,
+                           get_log_level_color=get_log_level_color)
 
 def get_log_level_color(level):
     colors = {
@@ -295,10 +361,19 @@ def show_stats():
     # Get all stats
     stats = db.get_all_stats()
 
-    # Initialize default values if stats are missing
+    # Retrieve stats, use 0 as default if not found
     total_hits = stats.get('total_hits', 0)
     cached_hits = stats.get('cached_hits', 0)
     fresh_hits = stats.get('fresh_hits', 0)
+
+    # Log the retrieved stats for debugging
+    logger.info(f"Retrieved stats: Total Hits: {total_hits}, Cached Hits: {cached_hits}, Fresh Hits: {fresh_hits}")
+
+    # Ensure total_hits is the sum of cached_hits and fresh_hits
+    if total_hits != cached_hits + fresh_hits:
+        logger.warning(f"Stats mismatch: Total Hits ({total_hits}) != Cached Hits ({cached_hits}) + Fresh Hits ({fresh_hits})")
+        total_hits = cached_hits + fresh_hits
+        db.set_stat('total_hits', total_hits)
 
     # Prepare data for charts
     overall_data = {
@@ -323,214 +398,19 @@ def show_stats():
         'total': [hits_by_day.get(day, 0) for day in days_this_month],
     }
     
-    stats_html = f"""
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>API Statistics Dashboard</title>
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-        <style>
-            body {{
-                font-family: Arial, sans-serif;
-                line-height: 1.6;
-                color: #333;
-                max-width: 1200px;
-                margin: 0 auto;
-                padding: 20px;
-            }}
-            h1, h2 {{
-                color: #2c3e50;
-            }}
-            .stat-box {{
-                background-color: #f0f0f0;
-                border-radius: 5px;
-                padding: 15px;
-                margin-bottom: 20px;
-            }}
-            table {{
-                width: 100%;
-                border-collapse: collapse;
-            }}
-            th, td {{
-                border: 1px solid #ddd;
-                padding: 8px;
-                text-align: left;
-            }}
-            th {{
-                background-color: #f2f2f2;
-            }}
-            .chart-container {{
-                width: 100%;
-                height: 300px;
-                margin-bottom: 20px;
-            }}
-            .nav-bar {{
-                background-color: #2c3e50;
-                padding: 10px;
-                margin-bottom: 20px;
-            }}
-            .nav-bar a {{
-                color: white;
-                text-decoration: none;
-                padding: 5px 10px;
-            }}
-            .api-status {{
-                color: white;
-            }}
-            .nav-bar a:hover {{
-                background-color: #34495e;
-            }}
-            .status-indicator {{
-                display: inline-block;
-                width: 10px;
-                height: 10px;
-                border-radius: 50%;
-                margin-left: 5px;
-            }}
-            .status-green {{
-                background-color: #00ff00;
-            }}
-            .status-red {{
-                background-color: #ff0000;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="nav-bar">
-            <a href="/">Home</a>
-            <a href="/stats">Statistics</a>
-            <a href="/logs">Logs</a>
-            <a href="/tryout">Tryout</a>
-            <span id="api-status" style="color: white;">API Status: <span class="status-indicator status-{api_status}"></span></span>
-        </div>
-        <h1>API Statistics Dashboard</h1>
-        
-        <div class="stat-box">
-            <h2>Overall Statistics</h2>
-            <p>Total Hits: {total_hits}</p>
-            <p>Cached Hits: {cached_hits}</p>
-            <p>Fresh Hits: {fresh_hits}</p>
-            <div class="chart-container">
-                <canvas id="overallChart"></canvas>
-            </div>
-        </div>
-        
-        <div class="stat-box">
-            <h2>This Year's Statistics ({current_year})</h2>
-            <p>Total Hits: {sum(this_year_data['total'])}</p>
-            <div class="chart-container">
-                <canvas id="thisYearChart"></canvas>
-            </div>
-        </div>
-        
-        <div class="stat-box">
-            <h2>This Month's Statistics ({current_month})</h2>
-            <p>Total Hits: {sum(this_month_data['total'])}</p>
-            <div class="chart-container">
-                <canvas id="thisMonthChart"></canvas>
-            </div>
-        </div>
-        
-        <div class="stat-box">
-            <h2>Cached Records</h2>
-            <p>Total Cached Records: {cached_records_count}</p>
-        </div>
-        
-        <div class="stat-box">
-            <h2>Sex & Nudity Categories</h2>
-            <table>
-                <tr><th>Category</th><th>Count</th></tr>
-                {''.join(f"<tr><td>{cat}</td><td>{count}</td></tr>" for cat, count in stats.get('sex_nudity_categories', {}).items())}
-            </table>
-        </div>
-        
-        <div class="stat-box">
-            <h2>Countries Using the API</h2>
-            <table>
-                <tr><th>Country</th><th>Hits</th></tr>
-                {''.join(f"<tr><td>{country}</td><td>{count}</td></tr>" for country, count in stats.get('countries', {}).items())}
-            </table>
-        </div>
-
-        <script>
-            // Overall Statistics Chart
-            new Chart(document.getElementById('overallChart'), {{
-                type: 'bar',
-                data: {{
-                    labels: {overall_data['labels']},
-                    datasets: [{{
-                        label: 'Hits',
-                        data: {overall_data['data']},
-                        backgroundColor: ['rgba(75, 192, 192, 0.6)', 'rgba(54, 162, 235, 0.6)', 'rgba(255, 206, 86, 0.6)']
-                    }}]
-                }},
-                options: {{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {{
-                        y: {{
-                            beginAtZero: true
-                        }}
-                    }}
-                }}
-            }});
-
-            // This Year's Statistics Chart
-            new Chart(document.getElementById('thisYearChart'), {{
-                type: 'line',
-                data: {{
-                    labels: {this_year_data['labels']},
-                    datasets: [
-                        {{
-                            label: 'Total Hits',
-                            data: {this_year_data['total']},
-                            borderColor: 'rgba(75, 192, 192, 1)',
-                            fill: false
-                        }}
-                    ]
-                }},
-                options: {{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {{
-                        y: {{
-                            beginAtZero: true
-                        }}
-                    }}
-                }}
-            }});
-
-            // This Month's Statistics Chart
-            new Chart(document.getElementById('thisMonthChart'), {{
-                type: 'line',
-                data: {{
-                    labels: {this_month_data['labels']},
-                    datasets: [
-                        {{
-                            label: 'Total Hits',
-                            data: {this_month_data['total']},
-                            borderColor: 'rgba(75, 192, 192, 1)',
-                            fill: false
-                        }}
-                    ]
-                }},
-                options: {{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {{
-                        y: {{
-                            beginAtZero: true
-                        }}
-                    }}
-                }}
-            }});
-        </script>
-    </body>
-    </html>
-    """
-    return stats_html
+    return render_template('stats.html', 
+                           api_status=api_status,
+                           total_hits=total_hits,
+                           cached_hits=cached_hits,
+                           fresh_hits=fresh_hits,
+                           overall_data=overall_data,
+                           this_year_data=this_year_data,
+                           this_month_data=this_month_data,
+                           current_year=current_year,
+                           current_month=current_month,
+                           cached_records_count=cached_records_count,
+                           sex_nudity_categories=stats.get('sex_nudity_categories', {}),
+                           countries=stats.get('countries', {}))
 
 @app.route('/tryout', methods=['GET', 'POST'])
 def tryout():
@@ -566,10 +446,6 @@ def tryout():
                 
                 # Check if the result was cached
                 is_cached = result.get('is_cached', False)
-                
-                # If 'cached' key is not in the result, check if process time is very short
-                if is_cached is None:
-                    is_cached = process_time < 0.1  # Assume cached if process time is less than 0.1 seconds
                 
                 # If the result is empty or contains only 'NA' values, set result to None
                 if not result.get('review-items') or all(item.get('Description', '').lower() == 'na' for item in result.get('review-items', [])):

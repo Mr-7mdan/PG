@@ -60,23 +60,37 @@ class SqliteCache:
     )
     '''
 
+    _create_sql_omdb = '''
+    CREATE TABLE IF NOT EXISTS omdb_cache (
+        key TEXT PRIMARY KEY,
+        value BLOB,
+        expires REAL
+    )
+    '''
+
     # other properties
     connection = None
 
     def __init__(self):
         temp_dir = os.getcwd()
-        logger.info('temp dir is ' + temp_dir)
+        logger.info(f'temp dir is {temp_dir}')
         cache_dir = os.path.join(temp_dir, 'cache')
 
-        isExist = os.path.exists(cache_dir)
+        try:
+            os.makedirs(cache_dir, exist_ok=True)
+            logger.info(f'Cache directory is {cache_dir}')
+        except Exception as e:
+            logger.error(f"Failed to create cache directory: {e}")
+            raise
 
-        if not isExist:
-            os.makedirs(cache_dir)
-        logger.info('the cache dir is ' + cache_dir)
+        self.path = os.path.join(cache_dir, 'cache.sqlite')
+        logger.info(f'Database path is {self.path}')
 
-        self.path = cache_dir
-
-        self._create_tables()
+        try:
+            self._create_tables()
+        except Exception as e:
+            logger.error(f"Failed to create tables: {e}")
+            raise
 
     def _create_tables(self):
         with self._get_conn() as conn:
@@ -84,6 +98,7 @@ class SqliteCache:
             conn.execute(self._create_index)
             conn.execute(self._create_sql_stats)
             conn.execute(self._create_sql_logs)
+            conn.execute(self._create_sql_omdb)
             logger.debug('Created tables and indexes.')
 
     def _get_conn(self):
@@ -93,28 +108,24 @@ class SqliteCache:
         if self.connection:
             return self.connection
 
-        # specify where we want the cache db to live
-        cache_db_path = os.path.join(self.path, 'cache.sqlite')
-        self.cache_db_path = cache_db_path
-    
-        # setup the connection
-        conn = sqlite3.Connection(cache_db_path, timeout=60, check_same_thread=False)
-        logger.debug('Connected to {path}'.format(path=cache_db_path))
+        try:
+            conn = sqlite3.connect(self.path, timeout=60, check_same_thread=False)
+            logger.debug(f'Connected to {self.path}')
+        except sqlite3.OperationalError as e:
+            logger.error(f"Failed to connect to database: {e}")
+            logger.error(f"Database path: {self.path}")
+            logger.error(f"Current working directory: {os.getcwd()}")
+            raise
 
-        # ensure that the table schema is available. The
-        # 'IF NOT EXISTS' in the create_sql should be
-        # pretty self explanitory
         with conn:
             conn.execute(self._create_sql)
             conn.execute(self._create_index)
             conn.execute(self._create_sql_stats)
             conn.execute(self._create_sql_logs)
+            conn.execute(self._create_sql_omdb)
             logger.debug('Created tables and indexes.')
 
-        # set the connection property
         self.connection = conn
-
-        # return the connection
         return self.connection
 
     def _create_table(self):
@@ -127,36 +138,6 @@ class SqliteCache:
         '''
         self.conn.execute(create_table_sql)
         self.conn.commit()
-
-    def _get_conn(self):
-
-        """ Returns a Sqlite connection """
-
-        if self.connection:
-            return self.connection
-
-        # specify where we want the cache db to live
-        cache_db_path = os.path.join(self.path, 'cache.sqlite')
-
-        # setup the connection
-        conn = sqlite3.Connection(cache_db_path, timeout=60, check_same_thread=False)
-        logger.debug('Connected to {path}'.format(path=cache_db_path))
-
-        # ensure that the table schema is available. The
-        # 'IF NOT EXISTS' in the create_sql should be
-        # pretty self explanitory
-        with conn:
-            conn.execute(self._create_sql)
-            conn.execute(self._create_index)
-            conn.execute(self._create_sql_stats)
-            conn.execute(self._create_sql_logs)
-            logger.debug('Created tables and indexes.')
-
-        # set the connection property
-        self.connection = conn
-
-        # return the connection
-        return self.connection
 
     def get(self, key):
 
@@ -263,33 +244,17 @@ class SqliteCache:
                 self.update(key, show_info, timeout)
 
     def clear(self):
-
-        """ Clear a cache """
-
         try:
-            # Check if the directory exists
-            
-            db_dir = os.path.dirname(self.path)
-            if not os.path.exists(db_dir):
-                os.makedirs(db_dir)
-                logging.info(f"Created directory: {db_dir}")
-
-            # Try to open the database
-            conn = sqlite3.Connection(self.path, timeout=60, check_same_thread=False)
-            # ... rest of the method ...
-        except sqlite3.OperationalError as e:
-            logging.error(f"Failed to open database: {e}")
-            logging.error(f"Database path: {self.path}")
-            logging.error(f"Current working directory: {os.getcwd()}")
-            raise  # Re-raise the exception after logging
-
-        self._clear_sql = "DELETE FROM cache"
-
-        conn = sqlite3.Connection(cache_db_path, timeout=60, check_same_thread=False)
-        
-        with conn:
-            conn.execute(self._create_sql)          
-            logger.info('Cache cleared sucessfully')
+            conn = self._get_conn()
+            with conn:
+                conn.execute("DELETE FROM entries")
+                conn.execute("DELETE FROM stats")
+                conn.execute("DELETE FROM logs")
+                conn.execute("DELETE FROM omdb_cache")
+            logger.info('Cache cleared successfully')
+        except Exception as e:
+            logger.error(f"Failed to clear cache: {e}")
+            raise
 
     def __del__(self):
 
@@ -336,6 +301,23 @@ class SqliteCache:
         with self._get_conn() as conn:
             cursor = conn.execute("SELECT * FROM logs ORDER BY timestamp DESC LIMIT ? OFFSET ?", (limit, offset))
             return cursor.fetchall()
+
+    def get_omdb_cache(self, key):
+        with self._get_conn() as conn:
+            cursor = conn.execute("SELECT value, expires FROM omdb_cache WHERE key = ?", (key,))
+            result = cursor.fetchone()
+            if result:
+                value, expires = result
+                if expires == 0 or expires > time():
+                    return loads(value)
+        return None
+
+    def set_omdb_cache(self, key, value):
+        expire = time() + 365 * 24 * 60 * 60  # 1 year expiry
+        val = PickleBuffer(dumps(value))
+        with self._get_conn() as conn:
+            conn.execute("INSERT OR REPLACE INTO omdb_cache (key, value, expires) VALUES (?, ?, ?)", 
+                         (key, val, expire))
 
 # allow this module to be used to clear the cache
 if __name__ == '__main__':
