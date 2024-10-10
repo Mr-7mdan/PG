@@ -43,6 +43,7 @@ class DatabaseHandler(logging.Handler):
 # Initialize the SqliteCache
 db_path = '/tmp/cache.sqlite' if os.environ.get('VERCEL_ENV') else 'cache.sqlite'
 db = SqliteCache(db_path)
+db.ensure_omdb_cache_table()  # Add this line
 
 # Set up the logger to use the database handler
 logger = logging.getLogger()

@@ -88,6 +88,10 @@ class SqliteCache:
             # Create stats table if it doesn't exist
             conn.execute('''CREATE TABLE IF NOT EXISTS stats
                             (key TEXT PRIMARY KEY, value TEXT)''')
+            
+            # Create omdb_cache table if it doesn't exist
+            conn.execute('''CREATE TABLE IF NOT EXISTS omdb_cache
+                            (key TEXT PRIMARY KEY, value BLOB, expires REAL)''')
 
     def _get_conn(self):
         conn = sqlite3.connect(self.db_path, timeout=60, check_same_thread=False)
@@ -301,6 +305,11 @@ class SqliteCache:
     def get_cached_records_count(self):
         with self._get_conn() as conn:
             return conn.execute("SELECT COUNT(*) FROM entries").fetchone()[0]
+
+    def ensure_omdb_cache_table(self):
+        with self._get_conn() as conn:
+            conn.execute('''CREATE TABLE IF NOT EXISTS omdb_cache
+                            (key TEXT PRIMARY KEY, value BLOB, expires REAL)''')
 
 # allow this module to be used to clear the cache
 if __name__ == '__main__':
