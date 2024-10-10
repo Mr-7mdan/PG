@@ -71,26 +71,9 @@ class SqliteCache:
     # other properties
     connection = None
 
-    def __init__(self):
-        temp_dir = os.getcwd()
-        logger.info(f'temp dir is {temp_dir}')
-        cache_dir = os.path.join(temp_dir, 'cache')
-
-        try:
-            os.makedirs(cache_dir, exist_ok=True)
-            logger.info(f'Cache directory is {cache_dir}')
-        except Exception as e:
-            logger.error(f"Failed to create cache directory: {e}")
-            raise
-
-        self.path = os.path.join(cache_dir, 'cache.sqlite')
-        logger.info(f'Database path is {self.path}')
-
-        try:
-            self._create_tables()
-        except Exception as e:
-            logger.error(f"Failed to create tables: {e}")
-            raise
+    def __init__(self, db_path):
+        self.path = db_path
+        self._create_tables()
 
     def _create_tables(self):
         with self._get_conn() as conn:
