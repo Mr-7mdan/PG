@@ -38,11 +38,8 @@ app.logger.setLevel(logging.INFO)
 app.config['DEBUG'] = True
 
 # Initialize the SqliteCache
-try:
-    db = SqliteCache()
-except Exception as e:
-    logger.error(f"Failed to initialize SqliteCache: {e}")
-    sys.exit(1)
+db_path = '/tmp/cache.sqlite' if os.environ.get('VERCEL_ENV') else 'cache.sqlite'
+db = SqliteCache(db_path)
 
 # Update the update_stats function
 def update_stats(is_cached, sex_nudity_category, country):
