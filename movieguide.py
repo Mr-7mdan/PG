@@ -3,7 +3,8 @@ from bs4 import BeautifulSoup
 import re
 import json
 import os
-from index import get_imdb_id_from_omdb
+from utils import get_imdb_id_from_omdb  # Import the function from utils.py
+
 def MovieGuideOrgScrapper(ID, videoName):
     moviename = videoName.lower().strip().replace(" ","-").replace(":","").strip()
 

@@ -1,9 +1,8 @@
 import requests
 from bs4 import BeautifulSoup
 import re
-import json
-import os
-from index import get_imdb_id_from_omdb
+from difflib import SequenceMatcher
+from utils import get_imdb_id_from_omdb  # Import the function from utils.py
 
 def getDesc(soup, s):
     descs = soup.findAll("h5", {"class": "details-title"})

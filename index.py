@@ -15,7 +15,6 @@ import commonsensemedia
 import movieguide
 from SQLiteCache import SqliteCache
 from waitress import serve
-import logging
 from paste.translogger import TransLogger
 import traceback
 from collections import defaultdict
@@ -28,19 +27,31 @@ import threading
 import calendar
 import sys
 from functools import wraps
+from utils import get_title_from_omdb, get_imdb_id_from_omdb
 
 # Create the Flask app instance
 app = Flask(__name__)
 
-# Now you can set the logger level
-logger = logging.getLogger('waitress')
-logging.basicConfig(level=logging.INFO)
-app.logger.setLevel(logging.INFO)
-app.config['DEBUG'] = True
+# Set up logging to use the database
+class DatabaseHandler(logging.Handler):
+    def __init__(self, db):
+        super().__init__()
+        self.db = db
+
+    def emit(self, record):
+        self.db.add_log(record.levelname, self.format(record))
 
 # Initialize the SqliteCache
 db_path = '/tmp/cache.sqlite' if os.environ.get('VERCEL_ENV') else 'cache.sqlite'
 db = SqliteCache(db_path)
+
+# Set up the logger to use the database handler
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+db_handler = DatabaseHandler(db)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+db_handler.setFormatter(formatter)
+logger.addHandler(db_handler)
 
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
 
@@ -179,65 +190,6 @@ def get_country_from_ip(ip):
 # Don't forget to close the reader when your application exits
 # You can do this in your main block or use atexit to ensure it's called
 atexit.register(geoip_reader.close)
-
-# Add this function to get movie/TV show name from OMDB API
-def get_title_from_omdb(imdb_id):
-    omdb_api_key = os.environ.get('OMDB_API_KEY')
-    if not omdb_api_key:
-        app.logger.error("OMDB API key not found in environment variables")
-        return None
-
-    cache_key = f"omdb_title_{imdb_id}"
-    cached_data = db.get_omdb_cache(cache_key)
-    if cached_data:
-        app.logger.info(f"Retrieved title for {imdb_id} from OMDB cache")
-        return cached_data.get('Title')
-
-    url = f"http://www.omdbapi.com/?i={imdb_id}&apikey={omdb_api_key}"
-    
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        
-        if data.get('Response') == 'True':
-            db.set_omdb_cache(cache_key, data)
-            return data.get('Title')
-        else:
-            app.logger.warning(f"No title found for IMDb ID: {imdb_id}")
-            return None
-    except requests.RequestException as e:
-        app.logger.error(f"Error fetching data from OMDB: {str(e)}")
-        return None
-
-def get_imdb_id_from_omdb(video_name, release_year=None):
-    omdb_api_key = os.environ.get('OMDB_API_KEY')
-    if not omdb_api_key:
-        app.logger.error("OMDB API key not found in environment variables")
-        return None
-
-    cache_key = f"omdb_id_{video_name}_{release_year}"
-    cached_data = db.get_omdb_cache(cache_key)
-    if cached_data:
-        app.logger.info(f"Retrieved data for {video_name} ({release_year}) from OMDB cache")
-        return cached_data
-
-    url = f"http://www.omdbapi.com/?t={video_name}&y={release_year}&apikey={omdb_api_key}"
-    
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        
-        if data.get('Response') == 'True':
-            db.set_omdb_cache(cache_key, data)
-            return data
-        else:
-            app.logger.warning(f"No IMDB data found for: {video_name}")
-            return None
-    except requests.RequestException as e:
-        app.logger.error(f"Error fetching data from OMDB: {str(e)}")
-        return None
 
 @app.route('/get_data', methods=['GET'])
 def get_data():
@@ -518,44 +470,14 @@ def tryout():
 
 # Run the Flask app
 if __name__ == '__main__':
-    import logging
-    from logging.handlers import RotatingFileHandler
-    import os
-    
-    # Configure the root logger
-    logging.basicConfig(level=logging.INFO)
-    
-    # Define the log file path
-    log_file = 'api.log'
-    
-    # Create the log file if it doesn't exist
-    if not os.path.exists(log_file):
-        open(log_file, 'a').close()
-        print(f"Created log file: {log_file}")
-    
-    # Create a RotatingFileHandler
-    file_handler = RotatingFileHandler(log_file, maxBytes=500*1024, backupCount=1)
-    file_handler.setLevel(logging.INFO)
-    
-    # Create a formatter and set it for the handler
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    file_handler.setFormatter(formatter)
-    
-    # Add the file handler to the root logger
-    logging.getLogger('').addHandler(file_handler)
-    
-    # Set the logger for the Flask app
-    app.logger.setLevel(logging.INFO)
-    app.logger.addHandler(file_handler)
-    
     # Log some initial information
-    logging.info("Application started")
+    logger.info("Application started")
     
     host = "0.0.0.0"
     port = 8080
-    logging.info(f"Server starting on http://{host}:{port}")
-    logging.info(f"API documentation available at http://{host}:{port}/")
-    logging.info(f"API endpoint: http://{host}:{port}/get_data")
-    logging.info(f"Status endpoint: http://{host}:{port}/status")
-    logging.info(f"Stats dashboard: http://{host}:{port}/stats")
-    serve(TransLogger(app, setup_console_handler=True), host=host, port=port)
+    logger.info(f"Server starting on http://{host}:{port}")
+    logger.info(f"API documentation available at http://{host}:{port}/")
+    logger.info(f"API endpoint: http://{host}:{port}/get_data")
+    logger.info(f"Status endpoint: http://{host}:{port}/status")
+    logger.info(f"Stats dashboard: http://{host}:{port}/stats")
+    serve(TransLogger(app, setup_console_handler=False), host=host, port=port)
