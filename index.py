@@ -498,8 +498,10 @@ def tryout():
         video_name = request.form.get('video_name')
         release_year = request.form.get('release_year')
 
-        if not imdb_id or not provider:
-            error = "IMDB ID and Provider are required fields."
+        if not imdb_id and not video_name:
+            error = "Either IMDB ID or Video Name is required."
+        elif not provider:
+            error = "Provider is a required field."
         else:
             try:
                 start_time = time.time()
@@ -512,18 +514,26 @@ def tryout():
                 # Use the current request's host for the API call
                 api_url = f"{request.scheme}://{request.host}/get_data"
                 response = requests.get(api_url, params=params)
-                result = response.json()
-                process_time = round(time.time() - start_time, 2)
                 
-                # Check if the result was cached
-                is_cached = result.get('is_cached', False)
+                if response.status_code == 200:
+                    try:
+                        result = response.json()
+                        process_time = round(time.time() - start_time, 2)
+                        
+                        # Check if the result was cached
+                        is_cached = result.get('is_cached', False)
+                        
+                        # If the result is empty or contains only 'NA' values, set result to None
+                        if not result.get('review-items') or all(item.get('Description', '').lower() == 'na' for item in result.get('review-items', [])):
+                            result = None
+                            error = "No meaningful data found for the given input."
+                    except json.JSONDecodeError:
+                        error = f"Invalid JSON response received. Response content: {response.text[:100]}..."
+                else:
+                    error = f"API request failed with status code: {response.status_code}. Response: {response.text[:100]}..."
                 
-                # If the result is empty or contains only 'NA' values, set result to None
-                if not result.get('review-items') or all(item.get('Description', '').lower() == 'na' for item in result.get('review-items', [])):
-                    result = None
-                
-            except Exception as e:
-                error = f"An error occurred: {str(e)}"
+            except requests.RequestException as e:
+                error = f"An error occurred while making the API request: {str(e)}"
 
     return render_template('tryout.html', api_status=api_status, providers=providers, result=result, error=error, is_cached=is_cached, process_time=process_time)
 
