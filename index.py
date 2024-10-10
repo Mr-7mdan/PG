@@ -513,7 +513,11 @@ def tryout():
                 }
                 # Use the current request's host for the API call
                 api_url = f"{request.scheme}://{request.host}/get_data"
-                response = requests.get(api_url, params=params)
+                
+                # Use the same session as the current request
+                with requests.Session() as session:
+                    session.cookies.update(request.cookies)
+                    response = session.get(api_url, params=params)
                 
                 if response.status_code == 200:
                     try:
