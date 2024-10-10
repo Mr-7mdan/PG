@@ -270,9 +270,13 @@ class SqliteCache:
             return json.loads(result[0]) if result else None
 
     def get_all_stats(self):
-        with self._get_conn() as conn:
-            cursor = conn.execute("SELECT key, value FROM stats")
-            return {key: json.loads(value) for key, value in cursor.fetchall()}
+        try:
+            with self._get_conn() as conn:
+                cursor = conn.execute("SELECT key, value FROM stats")
+                return {key: json.loads(value) for key, value in cursor.fetchall()}
+        except sqlite3.Error as e:
+            logger.error(f"Error getting all stats: {e}")
+            return {}  # Return an empty dict if there's an error
 
     # Logs methods
     def add_log(self, level, message):
@@ -308,9 +312,11 @@ if __name__ == '__main__':
     
     # Clear cache if no arguments or if 'clear' is specified
     if len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[1] == 'clear'):
-        c = SqliteCache()  # Use current directory as base path
+        # Use a default path or get it from an environment variable
+        default_db_path = os.environ.get('SQLITE_DB_PATH', 'cache.sqlite')
+        c = SqliteCache(default_db_path)
         c.clear()
-        print(' * Cache cleared')
+        print(f' * Cache cleared (Database: {default_db_path})')
     else:
         print('[!] Usage: python %s [clear]' % sys.argv[0])
         print('    Running without arguments or with "clear" will clear the cache.')

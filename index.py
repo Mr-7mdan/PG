@@ -48,12 +48,15 @@ def update_stats(is_cached, sex_nudity_category, country):
     current_month = datetime.now().strftime('%Y-%m')
     current_day = datetime.now().strftime('%Y-%m-%d')
 
-    # Update total hits
+    # Initialize stats if they don't exist
     stats['total_hits'] = stats.get('total_hits', 0) + 1
+    stats['cached_hits'] = stats.get('cached_hits', 0)
+    stats['fresh_hits'] = stats.get('fresh_hits', 0)
+
     if is_cached:
-        stats['cached_hits'] = stats.get('cached_hits', 0) + 1
+        stats['cached_hits'] += 1
     else:
-        stats['fresh_hits'] = stats.get('fresh_hits', 0) + 1
+        stats['fresh_hits'] += 1
 
     # Update This Year's Statistics
     hits_by_year = stats.get('hits_by_year', {})
