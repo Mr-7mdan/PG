@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import re
 import json
 import os
-
+from index import get_imdb_id_from_omdb
 def MovieGuideOrgScrapper(ID, videoName):
     moviename = videoName.lower().strip().replace(" ","-").replace(":","").strip()
 
@@ -45,20 +45,6 @@ def MovieGuideOrgScrapper(ID, videoName):
     Details = []
     CatData = []
 
-    def getIMDBID(name):
-        
-        omdb_api_key = os.environ.get('OMDB_API_KEY')
-        url = "http://www.omdbapi.com/?t=" + name.strip() + "&apikey=" + omdb_api_key +"&plot=full&r=json"
-        res = requests.get(url).content
-        json_object = json.loads(res)
-
-        if json_object["Response"] != 'False':
-            result = json_object["imdbID"]
-        else:
-            print("Couldn't find IMDB ID")
-            result = None
-        return result
-
     def getMGDesc(descs, s):
         for i in range(0,len(descs)):
         #for desc in descriptions:
@@ -73,7 +59,7 @@ def MovieGuideOrgScrapper(ID, videoName):
     if '200' in str(r):
         Soup = BeautifulSoup(r.text, "html.parser")
         descriptions = Soup.find("div",{"class":"movieguide_review_content"}).findAll("div",{"class":"movieguide_subheading"})
-        title = Soup.title.text.replace("- Movieguide | Movie Reviews for Christians","").strip()
+        title = Soup.title.text.split("|")[0].split("-")[0].strip()
         #print(sSoup)
         classifications = Soup.find("table", {"class":"movieguide_content_summary"})
         matches = classifications.findAll("tr")
@@ -107,7 +93,7 @@ def MovieGuideOrgScrapper(ID, videoName):
         #print(Details)
 
         Review = {
-            "id": getIMDBID(videoName),
+            "id": get_imdb_id_from_omdb(videoName),
             "status" : "Sucess",
             "title": title.title(),
             "provider": "MovieGuide",
@@ -116,3 +102,4 @@ def MovieGuideOrgScrapper(ID, videoName):
             "review-link": URL
         }
     return Review
+

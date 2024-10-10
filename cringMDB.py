@@ -22,8 +22,8 @@ def cringMDBScraper(ID,videoName):
         moviename1 = re.sub(r'\(\d*\)','', moviename).strip()
         moviename = moviename1.replace(":", "").replace("%3A","").replace(" ","+").lower()
         print("moviename : " + moviename)
-        print("videoName : " + videoName)
-        if videoName == moviename:
+        print("videoName : " + strName)
+        if strName == moviename:
             slug = res["slug"]
             movieURL = 'https://cringemdb.com/movie/' + slug
             r = Session.get(movieURL)
@@ -31,9 +31,11 @@ def cringMDBScraper(ID,videoName):
                 Soup = BeautifulSoup(r.text, "html.parser")
                 SectionsSoup = Soup.find("div", {"class":"content-warnings"})
                 Sections = SectionsSoup.findAll("div",{"class":"content-flag"})
-
+                print(Sections)
                 votesSoup = Soup.find("div",{"class":"movie-info"})
+                print(votesSoup)
                 votes = votesSoup.find("span",{"itemprop":"bestRating"}).text
+                print(votes)
                 for sec in Sections:
                     section = {
                         "name": sec.h3.text.strip(),
@@ -51,7 +53,7 @@ def cringMDBScraper(ID,videoName):
                     "review-items": advisory,
                     "review-link": movieURL
                         }
-
+                print(show_info)
     if advisory in [None,""]:
         show_info = {
             "id": ID,

@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template_string, Response, render_template
+from flask import Flask, request, jsonify, render_template_string, Response, render_template, redirect, url_for, session
 from bs4 import BeautifulSoup
 import requests
 import json
@@ -27,6 +27,7 @@ import os
 import threading
 import calendar
 import sys
+from functools import wraps
 
 # Create the Flask app instance
 app = Flask(__name__)
@@ -40,6 +41,72 @@ app.config['DEBUG'] = True
 # Initialize the SqliteCache
 db_path = '/tmp/cache.sqlite' if os.environ.get('VERCEL_ENV') else 'cache.sqlite'
 db = SqliteCache(db_path)
+
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('admin_logged_in'):
+            return redirect(url_for('admin_login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    api_status = "green" if is_api_running() else "red"
+    if request.method == 'POST':
+        if request.form['password'] == 'savekids':
+            session['admin_logged_in'] = True
+            return redirect(url_for('admin_panel'))
+        else:
+            return render_template('admin_login.html', api_status=api_status, error='Invalid password')
+    return render_template('admin_login.html', api_status=api_status)
+
+@app.route('/admin/logout')
+def admin_logout():
+    session.pop('admin_logged_in', None)
+    return redirect(url_for('admin_login'))
+
+@app.route('/admin')
+@admin_required
+def admin_panel():
+    api_status = "green" if is_api_running() else "red"
+    env_vars = {
+        'OMDB_API_KEY': os.environ.get('OMDB_API_KEY', '')
+    }
+    record_counts = {
+        'logs': db.get_logs_count(),
+        'stats': db.get_stats_count(),
+        'cache': db.get_cached_records_count()
+    }
+    message = request.args.get('message')
+    return render_template('admin_panel.html', api_status=api_status, env_vars=env_vars, record_counts=record_counts, message=message)
+
+@app.route('/admin/clear_logs')
+@admin_required
+def clear_logs():
+    db.clear_logs()
+    return redirect(url_for('admin_panel', message='Logs cleared successfully'))
+
+@app.route('/admin/clear_stats')
+@admin_required
+def clear_stats():
+    db.clear_stats()
+    return redirect(url_for('admin_panel', message='Stats cleared successfully'))
+
+@app.route('/admin/clear_cache')
+@admin_required
+def clear_cache():
+    db.clear()
+    return redirect(url_for('admin_panel', message='Cache cleared successfully'))
+
+@app.route('/admin/update_env', methods=['POST'])
+@admin_required
+def update_env():
+    omdb_api_key = request.form.get('OMDB_API_KEY')
+    os.environ['OMDB_API_KEY'] = omdb_api_key
+    return redirect(url_for('admin_panel', message='Environment variables updated successfully'))
 
 # Update the update_stats function
 def update_stats(is_cached, sex_nudity_category, country):
@@ -198,24 +265,17 @@ def get_data():
                     release_year = omdb_data.get('Year')
             app.logger.info(f"Retrieved IMDB ID from OMDB: {imdb_id}, Release Year: {release_year}")
 
-        if imdb_id:
-            key = f"{imdb_id}_{provider}"
-        else:
-            key = f"{video_name.replace(':','').replace('-','_').replace(' ','_').lower()}_{provider}"
-        
-        app.logger.info(f"Cache key: {key}")
+        key = f"{provider}:{imdb_id or video_name}"
+        cached_result = db.get(key)
 
-        result = db.get(key)
-        is_cached = result is not None
-        
-        if is_cached:
-            app.logger.info(f"Cached result structure: {json.dumps(result, indent=2)}")
-            app.logger.info(f"Returning cached result for {result.get('title', 'Unknown title')} from {provider}")
+        if cached_result:
+            app.logger.info(f"Cached result structure: {json.dumps(cached_result, indent=2)}")
+            app.logger.info(f"Returning cached result for {cached_result.get('title', 'Unknown title')} from {provider}")
             
             # Check if review-items exist and are not empty
-            review_items = result.get('review-items')
+            review_items = cached_result.get('review-items')
             if not review_items:
-                app.logger.warning(f"No review items found in cached result for {result.get('title', 'Unknown title')} from {provider}")
+                app.logger.warning(f"No review items found in cached result for {cached_result.get('title', 'Unknown title')} from {provider}")
                 sex_nudity_category = None
             else:
                 sex_nudity_category = next((item.get('cat') for item in review_items if item.get('name') == 'Sex & Nudity'), None)
@@ -225,9 +285,9 @@ def get_data():
             country = get_country_from_ip(ip_address)
 
             # When calling update_stats, include the country
-            update_stats(is_cached, sex_nudity_category, country)
-            result['is_cached'] = True
-            return jsonify(result)
+            update_stats(True, sex_nudity_category, country)
+            cached_result['is_cached'] = True
+            return jsonify(cached_result)
         
         # Get video name from OMDB if not provided
         if not video_name:
@@ -277,7 +337,7 @@ def get_data():
             country = get_country_from_ip(ip_address)
 
             # When calling update_stats, include the country
-            update_stats(is_cached, sex_nudity_category, country)
+            update_stats(False, sex_nudity_category, country)
             
             # Only store in cache if review-items are not null
             if review_items:

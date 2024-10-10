@@ -72,44 +72,26 @@ class SqliteCache:
     connection = None
 
     def __init__(self, db_path):
-        self.path = db_path
+        self.db_path = db_path
         self._create_tables()
 
     def _create_tables(self):
         with self._get_conn() as conn:
-            conn.execute(self._create_sql)
-            conn.execute(self._create_index)
-            conn.execute(self._create_sql_stats)
-            conn.execute(self._create_sql_logs)
-            conn.execute(self._create_sql_omdb)
-            logger.debug('Created tables and indexes.')
+            # Create entries table if it doesn't exist
+            conn.execute('''CREATE TABLE IF NOT EXISTS entries
+                            (key TEXT PRIMARY KEY, val BLOB, exp BLOB)''')
+            
+            # Create logs table if it doesn't exist
+            conn.execute('''CREATE TABLE IF NOT EXISTS logs
+                            (id INTEGER PRIMARY KEY, timestamp TEXT, level TEXT, message TEXT)''')
+            
+            # Create stats table if it doesn't exist
+            conn.execute('''CREATE TABLE IF NOT EXISTS stats
+                            (key TEXT PRIMARY KEY, value TEXT)''')
 
     def _get_conn(self):
-
-        """ Returns a Sqlite connection """
-
-        if self.connection:
-            return self.connection
-
-        try:
-            conn = sqlite3.connect(self.path, timeout=60, check_same_thread=False)
-            logger.debug(f'Connected to {self.path}')
-        except sqlite3.OperationalError as e:
-            logger.error(f"Failed to connect to database: {e}")
-            logger.error(f"Database path: {self.path}")
-            logger.error(f"Current working directory: {os.getcwd()}")
-            raise
-
-        with conn:
-            conn.execute(self._create_sql)
-            conn.execute(self._create_index)
-            conn.execute(self._create_sql_stats)
-            conn.execute(self._create_sql_logs)
-            conn.execute(self._create_sql_omdb)
-            logger.debug('Created tables and indexes.')
-
-        self.connection = conn
-        return self.connection
+        conn = sqlite3.connect(self.db_path, timeout=60, check_same_thread=False)
+        return conn
 
     def _create_table(self):
         create_table_sql = '''
@@ -247,16 +229,10 @@ class SqliteCache:
             self.connection.close()
 
     def get_cached_records_count(self):
-        """Returns the total number of cached records"""
-        try:
-            with self._get_conn() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT COUNT(*) FROM entries")
-                count = cursor.fetchone()[0]
-                return count
-        except sqlite3.Error as e:
-            logger.error(f"Error getting cached records count: {e}")
-            return 0
+        with self._get_conn() as conn:
+            count = conn.execute("SELECT COUNT(*) FROM entries").fetchone()[0]
+            logger.info(f"Cached records count: {count}")
+            return count
 
     # Stats methods
     def set_stat(self, key, value):
@@ -305,6 +281,26 @@ class SqliteCache:
         with self._get_conn() as conn:
             conn.execute("INSERT OR REPLACE INTO omdb_cache (key, value, expires) VALUES (?, ?, ?)", 
                          (key, val, expire))
+
+    def clear_logs(self):
+        with self._get_conn() as conn:
+            conn.execute("DELETE FROM logs")
+
+    def clear_stats(self):
+        with self._get_conn() as conn:
+            conn.execute("DELETE FROM stats")
+
+    def get_logs_count(self):
+        with self._get_conn() as conn:
+            return conn.execute("SELECT COUNT(*) FROM logs").fetchone()[0]
+
+    def get_stats_count(self):
+        with self._get_conn() as conn:
+            return conn.execute("SELECT COUNT(*) FROM stats").fetchone()[0]
+
+    def get_cached_records_count(self):
+        with self._get_conn() as conn:
+            return conn.execute("SELECT COUNT(*) FROM entries").fetchone()[0]
 
 # allow this module to be used to clear the cache
 if __name__ == '__main__':

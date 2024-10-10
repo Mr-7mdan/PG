@@ -39,6 +39,18 @@ def ParentPreviewsScraper(ID,videoName):
         for block in blocks:
             score = block.find("span", {"class":"criteria_mark theme_accent_bg"}).text.replace("-","").strip()
 
+            # Handle 'plus' scores
+            if '+' in score:
+                base_score = score[0]
+                score_category = Cats.get(base_score, "Unknown")
+                if score_category != "Severe":
+                    # Move to the next higher category
+                    categories = list(Cats.values())
+                    next_category_index = categories.index(score_category) + 1
+                    score_category = categories[min(next_category_index, len(categories) - 1)]
+            else:
+                score_category = Cats.get(score, "Unknown")
+
             try:
                 if Review[block.span.text.strip()]:
                     x = Review[block.span.text.strip()]
@@ -50,11 +62,11 @@ def ParentPreviewsScraper(ID,videoName):
 
             CatData = {
                 "name" : NamesMap[block.span.text],
-                "score": block.find("span", {"class":"criteria_mark theme_accent_bg"}).text.replace("-","").strip(),
+                "score": score,
                 "description": x.replace("<p>","").replace("<br/>","").replace("</br>","").replace("</p>","").replace("<b>","").replace("</b>","").replace("<p>","").strip(),
-                "Cat": Cats[score],
+                "Cat": score_category,
                 "Votes": None
-                }
+            }
 
             Details.append(CatData)
 

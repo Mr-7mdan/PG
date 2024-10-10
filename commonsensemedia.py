@@ -35,14 +35,10 @@ def CommonSenseScrapper(ID, videoName):
         Cats = soup.find("div",{"id":"review-view-content-grid"}).find("div",{"class":"row"}).findAll("span",{"class":"rating__label"})
         age = soup.find("div", {"class": "review-rating"}).find("span", {"class":"rating__age"}).text.strip()
         review_summary = soup.find("div", {"class": "review-view-summary"})
-        if review_summary:
-            title = review_summary.div.h1.string
-        else:
-            print("Couldn't find the review summary. The page structure might have changed.")
-            title = "Unknown"
         jsonData = soup.find('script',{"type":"application/ld+json"}).string
         #print(jsonData)
         jsonload = json.loads(jsonData)
+        title = jsonload["@graph"][0]["itemReviewed"]["name"]
         imdburl= jsonload["@graph"][0]["itemReviewed"]["sameAs"]
         age2 = "age"+jsonload["@graph"][0]["typicalAgeRange"]
         isFamilyFriendly = "age"+jsonload["@graph"][0]["isFamilyFriendly"]
@@ -83,7 +79,7 @@ def CommonSenseScrapper(ID, videoName):
             Details.append(CatData)
 
         Review = {
-            "id": imdbid,
+            "id": ID,
             "status": "Sucess",
             "title": title.title(),
             "provider": "CommonSenseMedia",
