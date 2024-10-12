@@ -315,13 +315,19 @@ def get_data():
             result = KidsInMindScraper(imdb_id, video_name, release_year)
         elif "dove" in provider:
             result = dove.DoveFoundationScrapper(video_name)
+        elif "dovefoundation" in provider:
+            result = dove.DoveFoundationScrapper(video_name)
         elif "parentpreview" in provider:
             result = parentpreviews.ParentPreviewsScraper(imdb_id, video_name)
         elif "cring" in provider:
             result = cringMDB.cringMDBScraper(imdb_id, video_name)
         elif "commonsense" in provider:
             result = commonsensemedia.CommonSenseScrapper(imdb_id, video_name)
+        elif "csm" in provider:
+            result = commonsensemedia.CommonSenseScrapper(imdb_id, video_name)
         elif "movieguide" in provider:
+            result = movieguide.MovieGuideOrgScrapper(imdb_id, video_name)
+        elif "movieguideorg" in provider:
             result = movieguide.MovieGuideOrgScrapper(imdb_id, video_name)
         else:
             return jsonify({"error": f"Unknown provider: {provider}"}), 400
