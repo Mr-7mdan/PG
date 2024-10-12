@@ -17,8 +17,9 @@ def ParentPreviewsScraper(ID,videoName):
     NamesMap = {
         "Sexual Content" : "Sex & Nudity",
         "Violence": "Violence",
-        "Profanity":"Language",
-        "Substance Use":"Smoking, Alchohol & Drugs"
+        "Language":"Profanity",
+        "Substance Use":"Smoking, Alchohol & Drugs",
+        "Sexual Violence":"Sex & Nudity"
     }
 
     Details, CatData, Reviews, cats = [] ,[], [] ,[]

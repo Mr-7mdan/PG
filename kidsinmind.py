@@ -31,7 +31,7 @@ def KidsInMindScraper(ID, videoName, release_year=None):
     NamesMap = {
         "SEX/NUDITY" : "Sex & Nudity",
         "VIOLENCE/GORE": "Violence",
-        "LANGUAGE":"Language",
+        "LANGUAGE":"Profanity",
         "SUBSTANCE USE":"Smoking, Alchohol & Drugs",
         "DISCUSSION TOPICS": "Discussion Topics",
         "MESSAGE":"Message",

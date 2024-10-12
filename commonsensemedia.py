@@ -20,7 +20,7 @@ def CommonSenseScrapper(ID, videoName):
         "Diverse Representations" : "Diverse Representations",
         "Violence & Scariness" : "Violence",
         "Sex, Romance & Nudity" : "Sex & Nudity",
-        "Language" : "Language",
+        "Language" : "Profanity",
         "Products & Purchases" : "Products & Purchases",
         "Drinking, Drugs & Smoking" : "Smoking, Alchohol & Drugs",
         "Educational Value":"Educational Value"

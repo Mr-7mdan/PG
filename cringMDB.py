@@ -16,6 +16,12 @@ def cringMDBScraper(ID,videoName):
         "no": "None",
         "yes": "Moderate"
         }
+    
+    NamesMap = {
+        "Nudity":"Sex & Nudity",
+        "Sexual Violence":"Sex & Nudity",
+        "Sex Scene":"Making Love",
+    }
     for res in Results:
         print("running for" + str(res))
         moviename = res["movie"]
@@ -38,7 +44,7 @@ def cringMDBScraper(ID,videoName):
                 print(votes)
                 for sec in Sections:
                     section = {
-                        "name": sec.h3.text.strip(),
+                        "name": NamesMap[sec.h3.text.strip()] if sec.h3.text.strip() in NamesMap else sec.h3.text.strip(),
                         "cat": Cats[sec.h4.text.lower().strip()],
                         "votes": votes.strip()
                     }

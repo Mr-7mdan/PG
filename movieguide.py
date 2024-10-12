@@ -34,24 +34,16 @@ def MovieGuideOrgScrapper(ID, videoName):
     NamesMap = {
         "Dominant Worldview and Other Worldview Content/Elements:": "Dominant Worldview",
         "Foul Language": "Language",
-        "Language": "Language",
+        "Language": "Profanity",
         "Violence" : "Violence",
-        "Nudity" : "Nudity",
-        "Sex": "Making Love",
+        "Nudity" : "Sex & Nudity",
+        "Sex": "Sex & Nudity",
         "Alcohol Use" : "Smoking, Alchohol & Drugs",
         "Smoking and/or Drug Use and Abuse" : "Smoking, & Alchohol & Drugs",
-        "Miscellaneous Immorality" : "Miscellaneous Immorality"
+        "Miscellaneous Immorality" : "Miscellaneous Immorality",
+        "Making Love":"Sex & Nudity",
+        "Nudity":"Sex & Nudity"
         }
-
-    ReNamesMap = {
-            "Dominant Worldview": "Dominant Worldview and Other Worldview Content/Elements:",
-            "Language": "Foul Language",
-            "Violence": "Violence",
-            "Nudity": "Nudity",
-            "Sex": "Sex",
-            "Smoking, Alchohol & Drugs": "Alcohol Use",
-            "Miscellaneous Immorality" : "Miscellaneous Immorality"
-            }
 
     Details = []
     CatData = []
