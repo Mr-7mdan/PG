@@ -67,8 +67,8 @@ def DoveFoundationScrapper(videoName):
                     "name": item.text.strip(),
                     "score": str(ID),
                     "description": getDesc(descs, item.text.strip()),
-                    "Cat": Cats[ID],
-                    "Votes": None
+                    "cat": Cats[ID],
+                    "votes": None
                 }
                 Details.append(CatData)
             except (KeyError, ValueError):

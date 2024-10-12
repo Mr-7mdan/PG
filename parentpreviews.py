@@ -65,8 +65,8 @@ def ParentPreviewsScraper(ID,videoName):
                 "name" : NamesMap[block.span.text],
                 "score": score,
                 "description": x.replace("<p>","").replace("<br/>","").replace("</br>","").replace("</p>","").replace("<b>","").replace("</b>","").replace("<p>","").strip(),
-                "Cat": score_category,
-                "Votes": None
+                "cat": score_category,
+                "votes": None
             }
 
             Details.append(CatData)

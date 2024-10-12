@@ -70,8 +70,8 @@ def CommonSenseScrapper(ID, videoName):
                     "name" : NamesMap[cat.text],
                     "score": score,
                     "description": desc,
-                    "Cat": CatsIDs[score],
-                    "Votes": None
+                    "cat": CatsIDs[score],
+                    "votes": None
                     }
                     #print(CatData)
                 except:
