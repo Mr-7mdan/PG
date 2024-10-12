@@ -319,6 +319,8 @@ def get_data():
             result = dove.DoveFoundationScrapper(video_name)
         elif "parentpreview" in provider:
             result = parentpreviews.ParentPreviewsScraper(imdb_id, video_name)
+        elif "parentpreviews" in provider:
+            result = parentpreviews.ParentPreviewsScraper(imdb_id, video_name)
         elif "cring" in provider:
             result = cringMDB.cringMDBScraper(imdb_id, video_name)
         elif "commonsense" in provider:
