@@ -97,7 +97,7 @@ def MovieGuideOrgScrapper(ID, videoName):
 
         Review = {
             "id": getIMDBID(videoName),
-            "status" : "Sucess",
+            "status" : "Success",
             "title": title.title(),
             "provider": "MovieGuide",
             "recommended-age": None,

@@ -52,7 +52,7 @@ def cringMDBScraper(ID,videoName):
 
                 show_info = {
                     "id": ID,
-                    "status": "Sucess",
+                    "status": "Success",
                     "title": moviename1,
                     "provider": "cringMDB",
                     "recommended-age": None,

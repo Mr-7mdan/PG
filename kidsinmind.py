@@ -163,6 +163,7 @@ def KidsInMindScraper(ID, videoName, release_year=None):
 
                     Review = {
                         "id": ID or imdbid.replace("['","").replace("']",""),
+                        "status": "Success",
                         "title": title,
                         "provider": "KidsInMind",
                         "recommended-age": None,

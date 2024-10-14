@@ -80,7 +80,7 @@ def CommonSenseScrapper(ID, videoName):
 
         Review = {
             "id": ID,
-            "status": "Sucess",
+            "status": "Success",
             "title": title.title(),
             "provider": "CommonSenseMedia",
             "recommended-age": age,

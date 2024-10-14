@@ -73,7 +73,7 @@ def ParentPreviewsScraper(ID,videoName):
 
         Review = {
             "id": ID,
-            "status": "Sucess",
+            "status": "Success",
             "title": videoName,
             "provider": "ParentPreviews",
             "recommended-age": '',
